@@ -443,20 +443,49 @@ class McHelperPlugin(Star):
                             shutil.rmtree(extract_dir, ignore_errors=True)
                             return
                         ext = Path(filename).suffix.lower()
-                        if ext in (
-                            ".exe",
-                            ".com",
-                            ".msi",
-                            ".scr",
-                            ".sh",
-                            ".bin",
-                            ".dll",
-                            ".so",
-                            ".dylib",
-                            ".vbs",
-                            ".js",
-                        ):
-                            yield event.plain_result(f"压缩包包含可执行文件（{filename}），已拒绝解压。")
+                        safe_text = (".log", ".txt")
+                        if ext in safe_text:
+                            pass
+                        elif ext == ".json":
+                            try:
+                                raw = zf.read(info)
+                                content = raw.decode("utf-8", errors="replace")
+                            except Exception:
+                                content = ""
+                            dangerous = (
+                                "powershell",
+                                "curl",
+                                "wget",
+                                "certutil",
+                                "bitsadmin",
+                                "vssadmin",
+                                "format",
+                                "del ",
+                                "rmdir ",
+                                "rd ",
+                                "net user",
+                                "net localgroup",
+                                "icacls",
+                                "takeown",
+                                "cacls",
+                                "reg ",
+                                "regedit",
+                                "mshta",
+                                "rundll32",
+                                "wmic",
+                                "cscript",
+                                "msiexec",
+                                "schtasks",
+                                "taskkill",
+                                "chmod",
+                                "chown",
+                            )
+                            if any(kw in content.lower() for kw in dangerous):
+                                yield event.plain_result(f"压缩包包含不安全的 JSON 文件（{filename}），已拒绝解压。")
+                                shutil.rmtree(extract_dir, ignore_errors=True)
+                                return
+                        else:
+                            yield event.plain_result(f"压缩包包含不支持的文件类型（{filename}），已拒绝解压。")
                             shutil.rmtree(extract_dir, ignore_errors=True)
                             return
                         if ext in (".bat", ".cmd", ".ps1"):
