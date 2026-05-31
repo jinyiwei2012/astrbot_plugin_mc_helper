@@ -22,7 +22,7 @@ def _is_safe_symlink(path: Path, extract_dir: Path) -> bool:
     try:
         resolved = path.resolve()
         return str(resolved).startswith(str(extract_dir.resolve()))
-    except Exception:
+    except (OSError, RuntimeError):
         return False
 
 

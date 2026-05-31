@@ -53,7 +53,7 @@ async def _validate_url(url: str) -> str:
         try:
             loop = asyncio.get_running_loop()
             addrinfo = await loop.getaddrinfo(host, None)
-        except Exception:
+        except (OSError, RuntimeError):
             raise ValueError("DNS 解析失败")
         if not addrinfo:
             raise ValueError("DNS 解析失败")
@@ -124,7 +124,7 @@ def scan_zip(zip_path: Path) -> list[str]:
                     else:
                         combined = raw
                     content = combined.decode("utf-8", errors="replace")
-                except Exception:
+                except (UnicodeDecodeError, ValueError):
                     content = ""
                 if any(kw in content.lower() for kw in DANGEROUS_CMDS):
                     blacklisted.append(fn)

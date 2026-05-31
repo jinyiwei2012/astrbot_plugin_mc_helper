@@ -379,14 +379,14 @@ class Handlers:
                     resolved = f.resolve()
                     if not str(resolved).startswith(str(root)):
                         continue
-                except Exception:
+                except (OSError, RuntimeError):
                     continue
             try:
                 c = f.read_text(encoding="utf-8", errors="ignore")
                 if not c.strip():
                     continue
                 (log_dir / f.name).write_text(c, encoding="utf-8")
-            except Exception as e:
+            except (OSError, UnicodeDecodeError) as e:
                 logger.debug(f"保存日志失败: {e}")
 
         if self.p.get_user_cfg(uid, "save_analysis", True):
