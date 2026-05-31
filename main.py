@@ -414,15 +414,35 @@ class McHelperPlugin(Star):
 
             try:
                 with zipfile.ZipFile(zip_path, "r") as zf:
+                    infos = zf.infolist()
+                    if len(infos) > 1000:
+                        yield event.plain_result("压缩包内文件过多（超过 1000 个），已拒绝解压。")
+                        shutil.rmtree(extract_dir, ignore_errors=True)
+                        return
                     max_extract_size = 50 * 1024 * 1024
+                    max_file_size = 10 * 1024 * 1024
                     total_size = 0
-                    for info in zf.infolist():
-                        total_size += info.file_size
-                        if total_size > max_extract_size:
-                            yield event.plain_result("压缩包过大（超过 50MB），已拒绝解压。")
+                    for info in infos:
+                        if info.file_size > max_file_size:
+                            yield event.plain_result(f"压缩包内存在单文件过大（{info.filename}），已拒绝解压。")
                             shutil.rmtree(extract_dir, ignore_errors=True)
                             return
-                        target_path = (extract_dir / info.filename).resolve()
+                        total_size += info.file_size
+                        if total_size > max_extract_size:
+                            yield event.plain_result("压缩包解压后总大小超过 50MB，已拒绝解压。")
+                            shutil.rmtree(extract_dir, ignore_errors=True)
+                            return
+                        filename = info.filename
+                        if (
+                            filename.startswith("/")
+                            or "/../" in filename
+                            or filename == ".."
+                            or filename.startswith("../")
+                        ):
+                            yield event.plain_result("压缩包包含无效的路径，已拒绝解压。")
+                            shutil.rmtree(extract_dir, ignore_errors=True)
+                            return
+                        target_path = (extract_dir / filename).resolve()
                         if not str(target_path).startswith(str(extract_dir.resolve())):
                             yield event.plain_result("压缩包包含无效的路径，已拒绝解压。")
                             shutil.rmtree(extract_dir, ignore_errors=True)
