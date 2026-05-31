@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import json
 import re
 import shutil
@@ -17,7 +18,7 @@ from astrbot.api.star import Context, Star, StarTools
 
 # Module-level compiled regex patterns
 _RE_JAR_PATH = re.compile(
-    r"[\w\\/.\-+]*mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
+    r"(?:^|[\s\\/])mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
     re.IGNORECASE,
 )
 _RE_JAR_NAME = re.compile(r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", re.IGNORECASE)
@@ -227,7 +228,7 @@ class McHelperPlugin(Star):
 
     async def _set_solution(self, key: str, solution: str, category: str = "AI生成"):
         async with self._lock:
-            old_db = json.loads(json.dumps(self.solutions_db))
+            old_db = copy.deepcopy(self.solutions_db)
             try:
                 if category not in self.solutions_db:
                     self.solutions_db[category] = {}
@@ -369,13 +370,17 @@ class McHelperPlugin(Star):
                 yield r
 
     @filter.command("mc_add_solution")
-    async def mc_add_solution(self, event: AstrMessageEvent, error_keyword: str, solution_text: str):
+    async def mc_add_solution(self, event: AstrMessageEvent):
         if not self._is_allowed_group(event):
             return
-        if not error_keyword or not solution_text:
-            yield event.plain_result("用法：/mc_add_solution <错误关键词> <解决方案>")
+        text = event.message_str.strip()
+        parts = text.split(maxsplit=2)
+        if len(parts) < 3:
+            yield event.plain_result(
+                "用法：/mc_add_solution <错误关键词> <解决方案>\n例如：/mc_add_solution OutOfMemoryError 请调大内存分配"
+            )
             return
-
+        _, error_keyword, solution_text = parts
         await self._set_solution(error_keyword.strip(), solution_text.strip(), "用户添加")
         yield event.plain_result(f"已添加解决方案：{error_keyword}")
 
@@ -409,7 +414,14 @@ class McHelperPlugin(Star):
 
             try:
                 with zipfile.ZipFile(zip_path, "r") as zf:
+                    max_extract_size = 50 * 1024 * 1024
+                    total_size = 0
                     for info in zf.infolist():
+                        total_size += info.file_size
+                        if total_size > max_extract_size:
+                            yield event.plain_result("压缩包过大（超过 50MB），已拒绝解压。")
+                            shutil.rmtree(extract_dir, ignore_errors=True)
+                            return
                         target_path = (extract_dir / info.filename).resolve()
                         if not str(target_path).startswith(str(extract_dir.resolve())):
                             yield event.plain_result("压缩包包含无效的路径，已拒绝解压。")
