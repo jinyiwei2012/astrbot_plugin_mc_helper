@@ -164,16 +164,16 @@ class McHelperPlugin(Star):
         if solution:
             yield event.plain_result(f"本地匹配到解决方案：\n{solution}")
         else:
-            yield event.plain_result("本地未匹配到方案，正在使用 AI 分析...")
             ai_result = await self._ask_ai_with_context(event, error_text)
             max_display = self._cfg("ai_result_max_chars", 2000)
-            yield event.plain_result(f"AI 分析结果：\n{ai_result[:max_display]}")
 
             error_key = self._extract_error_key(error_text)
             save_cat = self._cfg("auto_save_category", "AI生成")
             if error_key and not self._get_solution(error_key):
                 self._set_solution(error_key, ai_result, category=save_cat)
-                yield event.plain_result(f"已自动保存「{error_key}」的解决方案到本地知识库。")
+                yield event.plain_result(f"AI 分析结果：\n{ai_result[:max_display]}\n\n（已自动保存到本地知识库）")
+            else:
+                yield event.plain_result(f"AI 分析结果：\n{ai_result[:max_display]}")
 
     @filter.command("mc_add_solution")
     async def mc_add_solution(self, event: AstrMessageEvent, error_keyword: str, solution_text: str):
@@ -185,7 +185,7 @@ class McHelperPlugin(Star):
         yield event.plain_result(f"已添加解决方案：{error_keyword}")
 
     async def _handle_error_report(self, event: AstrMessageEvent, file_comp: File):
-        yield event.plain_result("收到错误报告压缩包，正在下载并分析...")
+        yield event.plain_result("正在下载并分析错误报告...")
 
         file_url = getattr(file_comp, "url", None) or getattr(file_comp, "file", None)
         if not file_url:
@@ -201,7 +201,6 @@ class McHelperPlugin(Star):
         extract_dir = str(reports_dir / Path(zip_name).stem)
 
         try:
-            yield event.plain_result("正在下载压缩包...")
             timeout_sec = self._cfg("download_timeout", 120)
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=timeout_sec)
@@ -213,7 +212,6 @@ class McHelperPlugin(Star):
                     with open(zip_path, "wb") as f:
                         f.write(await resp.read())
 
-            yield event.plain_result("正在解压并读取日志...")
             os.makedirs(extract_dir, exist_ok=True)
 
             try:
@@ -225,17 +223,13 @@ class McHelperPlugin(Star):
 
             error_logs = self._collect_logs(extract_dir)
             if not error_logs:
-                yield event.plain_result("压缩包中未找到 .log / .txt / .crash 格式的日志文件。")
+                yield event.plain_result("压缩包中未找到日志文件。")
                 return
-
-            yield event.plain_result(f"已读取日志（{len(error_logs)}字符），正在匹配本地解决方案...")
 
             local_solution = self._search_local_solutions(error_logs)
             if local_solution:
                 yield event.plain_result(f"✅ 本地匹配到解决方案：\n{local_solution}")
                 return
-
-            yield event.plain_result("❌ 本地未匹配到方案，正在使用 AI 进行分析...")
 
             latest_log = self._collect_latest_log(extract_dir)
             max_bytes = self._cfg("latest_log_max_bytes", 2_000_000)
@@ -247,13 +241,14 @@ class McHelperPlugin(Star):
 
             ai_result = await self._ask_ai_with_context(event, ai_source)
             max_display = self._cfg("ai_result_max_chars", 2000)
-            yield event.plain_result(f"AI 分析结果：\n{ai_result[:max_display]}")
 
             error_key = self._extract_error_key(error_logs)
             save_cat = self._cfg("auto_save_category", "AI生成")
             if error_key and not self._get_solution(error_key):
                 self._set_solution(error_key, ai_result, category=save_cat)
-                yield event.plain_result(f"已自动保存「{error_key}」的解决方案到本地知识库，下次可直接匹配。")
+                yield event.plain_result(f"AI 分析结果：\n{ai_result[:max_display]}\n\n（已自动保存到本地知识库）")
+            else:
+                yield event.plain_result(f"AI 分析结果：\n{ai_result[:max_display]}")
 
         except Exception as e:
             logger.error(f"处理错误报告时异常: {e}")
