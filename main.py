@@ -619,36 +619,13 @@ class McHelperPlugin(Star):
     def _collect_logs(self, extract_dir: Path) -> str:
         logs = []
         for f in extract_dir.rglob("*"):
-            if f.is_file() and f.suffix in (".log", ".txt", ".crash", ".json"):
+            if f.is_file() and f.suffix in (".log", ".txt", ".json"):
                 try:
                     content = f.read_text(encoding="utf-8", errors="ignore")
                     if content.strip():
                         logs.append(f"=== {f.name} ===\n{content}\n")
                 except Exception as e:
                     logger.error(f"读取文件 {f.name} 失败: {e}")
-
-        crash_report_dir = extract_dir / "crash-reports"
-        if crash_report_dir.is_dir():
-            for f in crash_report_dir.rglob("*"):
-                if f.is_file():
-                    try:
-                        content = f.read_text(encoding="utf-8", errors="ignore")
-                        if content.strip():
-                            logs.append(f"=== crash-reports/{f.name} ===\n{content}\n")
-                    except Exception as e:
-                        logger.error(f"读取崩溃报告 {f.name} 失败: {e}")
-
-        logs_dir = extract_dir / "logs"
-        if logs_dir.is_dir():
-            for f in logs_dir.rglob("*"):
-                if f.is_file():
-                    try:
-                        content = f.read_text(encoding="utf-8", errors="ignore")
-                        if content.strip():
-                            logs.append(f"=== logs/{f.name} ===\n{content}\n")
-                    except Exception as e:
-                        logger.error(f"读取日志 {f.name} 失败: {e}")
-
         return "\n".join(logs)
 
     def _collect_latest_log(self, extract_dir: Path) -> str:
@@ -934,41 +911,42 @@ class McHelperPlugin(Star):
             md_text,
             extensions=["extra", "codehilite", "nl2br"],
         )
-        return f"""<!DOCTYPE html>
+        html = """<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <style>
-  body {{
+  body {
     font-family: -apple-system, "Segoe UI", "Noto Sans SC", "Microsoft YaHei",
                  sans-serif;
     font-size: 15px; line-height: 1.7; color: #1a1a1a;
     padding: 28px 32px; max-width: 720px; margin: 0;
     background: #ffffff;
-  }}
-  h2 {{ font-size: 20px; color: #1976d2; margin: 16px 0 8px; }}
-  ul {{ padding-left: 20px; }}
-  li {{ margin: 4px 0; }}
-  code {{
+  }
+  h2 { font-size: 20px; color: #1976d2; margin: 16px 0 8px; }
+  ul { padding-left: 20px; }
+  li { margin: 4px 0; }
+  code {
     font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
     font-size: 13px; background: #e8e8e8; padding: 1px 5px;
     border-radius: 3px;
-  }}
-  pre {{
+  }
+  pre {
     background: #f5f5f5; padding: 12px 16px; border-radius: 6px;
     overflow-x: auto; font-size: 13px;
-  }}
-  hr {{ border: none; border-top: 1px solid #cccccc; margin: 12px 0; }}
-  em {{ color: #666; }}
-  blockquote {{
+  }
+  hr { border: none; border-top: 1px solid #cccccc; margin: 12px 0; }
+  em { color: #666; }
+  blockquote {
     border-left: 3px solid #1976d2; margin: 8px 0; padding: 4px 12px;
     background: #f8faff;
-  }}
-  p {{ margin: 6px 0; }}
+  }
+  p { margin: 6px 0; }
 </style>
 </head>
-<body>{body}</body>
+<body>__BODY__</body>
 </html>"""
+        return html.replace("__BODY__", body)
 
     async def _send_md_image(self, event, md_text: str):
         html = self._md_to_html(md_text)
