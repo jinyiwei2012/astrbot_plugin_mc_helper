@@ -422,16 +422,10 @@ class McHelperPlugin(Star):
                     max_extract_size = 50 * 1024 * 1024
                     max_file_size = 10 * 1024 * 1024
                     total_size = 0
+                    extracted = 0
                     for info in infos:
-                        if info.file_size > max_file_size:
-                            yield event.plain_result(f"压缩包内存在单文件过大（{info.filename}），已拒绝解压。")
-                            shutil.rmtree(extract_dir, ignore_errors=True)
-                            return
-                        total_size += info.file_size
-                        if total_size > max_extract_size:
-                            yield event.plain_result("压缩包解压后总大小超过 50MB，已拒绝解压。")
-                            shutil.rmtree(extract_dir, ignore_errors=True)
-                            return
+                        if info.is_dir():
+                            continue
                         filename = info.filename
                         if (
                             filename.startswith("/")
@@ -443,8 +437,7 @@ class McHelperPlugin(Star):
                             shutil.rmtree(extract_dir, ignore_errors=True)
                             return
                         ext = Path(filename).suffix.lower()
-                        safe_text = (".log", ".txt")
-                        if ext in safe_text:
+                        if ext in (".log", ".txt"):
                             pass
                         elif ext == ".json":
                             try:
@@ -457,86 +450,38 @@ class McHelperPlugin(Star):
                                 "curl",
                                 "wget",
                                 "certutil",
-                                "bitsadmin",
-                                "vssadmin",
                                 "format",
-                                "del ",
-                                "rmdir ",
-                                "rd ",
-                                "net user",
-                                "net localgroup",
-                                "icacls",
-                                "takeown",
-                                "cacls",
                                 "reg ",
-                                "regedit",
                                 "mshta",
                                 "rundll32",
                                 "wmic",
                                 "cscript",
-                                "msiexec",
                                 "schtasks",
-                                "taskkill",
-                                "chmod",
-                                "chown",
                             )
                             if any(kw in content.lower() for kw in dangerous):
-                                yield event.plain_result(f"压缩包包含不安全的 JSON 文件（{filename}），已拒绝解压。")
-                                shutil.rmtree(extract_dir, ignore_errors=True)
-                                return
+                                continue
                         else:
-                            yield event.plain_result(f"压缩包包含不支持的文件类型（{filename}），已拒绝解压。")
+                            continue
+                        if info.file_size > max_file_size:
+                            yield event.plain_result(f"压缩包内存在文件过大（{filename}），已拒绝解压。")
                             shutil.rmtree(extract_dir, ignore_errors=True)
                             return
-                        if ext in (".bat", ".cmd", ".ps1"):
-                            try:
-                                raw = zf.read(info)
-                                content = raw.decode("utf-8", errors="replace")
-                            except Exception:
-                                content = ""
-                            mc_keywords = ("java", "javaw", "minecraft", "minecraft.exe")
-                            has_mc = any(kw in content.lower() for kw in mc_keywords)
-                            dangerous = (
-                                "powershell",
-                                "curl",
-                                "wget",
-                                "certutil",
-                                "bitsadmin",
-                                "vssadmin",
-                                "format",
-                                "del ",
-                                "rmdir ",
-                                "rd ",
-                                "net use",
-                                "net user",
-                                "net localgroup",
-                                "icacls",
-                                "takeown",
-                                "cacls",
-                                "attrib",
-                                "reg ",
-                                "regedit",
-                                "mshta",
-                                "rundll32",
-                                "wmic",
-                                "cscript",
-                                "msiexec",
-                                "schtasks",
-                                "taskkill",
-                                "chmod",
-                                "chown",
-                            )
-                            has_danger = any(kw in content.lower() for kw in dangerous)
-                            if not has_mc or has_danger:
-                                yield event.plain_result(f"压缩包包含不安全的脚本文件（{filename}），已拒绝解压。")
-                                shutil.rmtree(extract_dir, ignore_errors=True)
-                                return
+                        total_size += info.file_size
+                        if total_size > max_extract_size:
+                            yield event.plain_result("压缩包解压后总大小超过 50MB，已拒绝解压。")
+                            shutil.rmtree(extract_dir, ignore_errors=True)
+                            return
                         target_path = (extract_dir / filename).resolve()
                         if not str(target_path).startswith(str(extract_dir.resolve())):
                             yield event.plain_result("压缩包包含无效的路径，已拒绝解压。")
                             shutil.rmtree(extract_dir, ignore_errors=True)
                             return
                         zf.extract(info, extract_dir)
+                        extracted += 1
+                    if extracted == 0:
+                        yield event.plain_result("压缩包中未找到可分析的日志文件。")
+                        shutil.rmtree(extract_dir, ignore_errors=True)
+                        return
             except zipfile.BadZipFile:
                 yield event.plain_result("压缩包损坏，无法解压。请检查文件。")
                 return
@@ -545,9 +490,6 @@ class McHelperPlugin(Star):
                     zip_path.unlink()
 
             error_logs = self._collect_logs(extract_dir)
-            if not error_logs:
-                yield event.plain_result("压缩包中未找到日志文件。")
-                return
 
             latest_log = self._collect_latest_log(extract_dir)
             max_bytes = self._cfg("latest_log_max_bytes", 2_000_000)
