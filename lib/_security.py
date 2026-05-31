@@ -33,7 +33,7 @@ def scan_zip(zip_path: Path) -> list[str]:
         for info in infos:
             if info.is_dir():
                 continue
-            fn = info.filename
+            fn = info.filename.rstrip(" .")
             if fn.startswith("/") or "/../" in fn or fn == ".." or fn.startswith("../"):
                 blacklisted.append(fn)
                 continue
@@ -61,7 +61,7 @@ def extract_safe_files(zip_path: Path, extract_dir: Path) -> int:
         for info in zf.infolist():
             if info.is_dir():
                 continue
-            filename = info.filename
+            filename = info.filename.rstrip(" .")
             ext = Path(filename).suffix.lower()
             if ext not in (".log", ".txt", ".json"):
                 continue
