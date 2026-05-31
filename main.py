@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import json
 import shutil
 from pathlib import Path
@@ -22,6 +23,7 @@ class McHelperPlugin(Star):
         self.store_path = StarTools.get_data_dir("astrbot_plugin_mc_helper")
         self.store_path.mkdir(parents=True, exist_ok=True)
         self._lock = asyncio.Lock()
+        self._config_dirty = False
 
         src = Path(__file__).parent / "data" / "solutions.json"
         self.db_path = self.store_path / "solutions.json"
@@ -49,23 +51,23 @@ class McHelperPlugin(Star):
 
     def _is_allowed(self, event: AstrMessageEvent) -> bool:
         wl = self._cfg("whitelist_groups", [])
-        return True if not wl else event.get_group_id() in wl
+        if not wl:
+            return True
+        wl_set = wl if isinstance(wl, set) else set(wl)
+        return event.get_group_id() in wl_set
 
     def get_solution(self, key: str):
         return get_solution(self.solutions, key)
 
     async def save_solution(self, key: str, solution: str, category: str):
         async with self._lock:
-            import copy
-            import json as _json
-
             old = copy.deepcopy(self.solutions)
             try:
                 if category not in self.solutions:
                     self.solutions[category] = {}
                 self.solutions[category][key] = {"solution": solution}
                 with open(self.db_path, "w", encoding="utf-8") as f:
-                    _json.dump(self.solutions, f, ensure_ascii=False, indent=2)
+                    json.dump(self.solutions, f, ensure_ascii=False, indent=2)
             except Exception as e:
                 self.solutions = old
                 logger.error(f"保存方案库失败: {e}")
@@ -88,6 +90,7 @@ class McHelperPlugin(Star):
         try:
             with open(self.user_cfg_path, "w", encoding="utf-8") as f:
                 json.dump(self.user_configs, f, ensure_ascii=False, indent=2)
+            self._config_dirty = False
         except Exception as e:
             logger.error(f"保存用户配置失败: {e}")
 

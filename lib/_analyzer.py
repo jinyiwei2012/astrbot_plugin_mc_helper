@@ -3,7 +3,6 @@
 import re
 from typing import Optional
 
-
 from ._utils import (
     RE_JAR_PATH,
     RE_JAR_NAME,
@@ -102,8 +101,7 @@ def extract_report_details(error_text: str) -> list[str]:
     return details
 
 
-def enrich_solution(solution: str, error_text: str) -> str:
-    details = extract_report_details(error_text)
+def enrich_solution(solution: str, details: list[str]) -> str:
     result = solution + "\n\n---"
     tips = []
 
@@ -203,19 +201,21 @@ def enrich_solution(solution: str, error_text: str) -> str:
 
 
 def search_local_solutions(solutions_db: dict, error_text: str) -> Optional[str]:
+    error_lower = error_text.lower()
     for category, entries in solutions_db.items():
         for pattern, entry in entries.items():
             solution = entry["solution"] if isinstance(entry, dict) else entry
-            if re.search(re.escape(pattern), error_text, re.IGNORECASE):
+            if pattern.lower() in error_lower:
                 return solution
 
     exit_code_match = re.search(r"Exit Code[:\s]*(-?\d+)", error_text)
     if exit_code_match:
         ec = exit_code_match.group(1)
+        target = f"Exit Code {ec}"
         for category, entries in solutions_db.items():
             for pattern, entry in entries.items():
                 solution = entry["solution"] if isinstance(entry, dict) else entry
-                if f"Exit Code {ec}" in pattern:
+                if target in pattern:
                     return solution
 
     return None

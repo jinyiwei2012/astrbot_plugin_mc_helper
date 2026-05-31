@@ -1,17 +1,23 @@
 """Duplicate mod detection."""
 
-from ._utils import RE_JAR_NAME, RE_JAR_PATH, RE_DUP_SECTION
+import re
 
 
 def check_duplicate_mods(duplicate_mods_data: dict, error_text: str) -> str | None:
-    found_jars = RE_JAR_NAME.findall(error_text)
-    found_paths = RE_JAR_PATH.findall(error_text)
-    dup_section = RE_DUP_SECTION.search(error_text)
-    if dup_section and not found_paths:
-        sec = dup_section.group(1)
-        found_paths = RE_JAR_PATH.findall(sec)
+    found_jars: list[str] = []
+    found_paths: list[str] = []
+
+    for m in re.finditer(r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", error_text, re.IGNORECASE):
+        found_jars.append(m.group(0))
+    for m in re.finditer(r"(?:^|[\s\\/])mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)", error_text, re.IGNORECASE):
+        found_paths.append(m.group(1))
+
+    ds = re.search(r"Duplicate\s*Mod[s]?[:\s]*\n((?:.{0,300}\n?){0,15})", error_text, re.IGNORECASE)
+    if ds and not found_paths:
+        sec = ds.group(1)
+        found_paths = re.findall(r"(?:^|[\s\\/])mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)", sec, re.IGNORECASE)
         if not found_paths:
-            found_paths = RE_JAR_NAME.findall(sec)
+            found_paths = re.findall(r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", sec, re.IGNORECASE)
 
     for group in duplicate_mods_data.get("mod_groups", []):
         current = group.get("current", "")

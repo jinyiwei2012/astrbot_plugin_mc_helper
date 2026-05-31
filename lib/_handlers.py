@@ -1,5 +1,6 @@
 """Command and message handlers."""
 
+import random
 import re
 import shutil
 import time
@@ -11,26 +12,33 @@ from astrbot.api.event import AstrMessageEvent
 from astrbot.api.message_components import File, Reply
 
 from ._utils import FAIL_PREFIXES, MAX_RECENT_FILES, RECENT_FILES_KEEP
-from ._analyzer import enrich_solution, search_local_solutions, extract_error_key
-from ._security import download_zip, scan_zip, extract_safe_files
+from ._analyzer import extract_report_details, enrich_solution, search_local_solutions, extract_error_key
+from ._security import download_zip, scan_zip, extract_safe_files, RateLimiter
 from ._file_utils import collect_logs, collect_latest_log
 from ._renderer import md_to_html
 from ._cme import analyze_cme_log, generate_cme_guide
 from ._duplicate_mods import check_duplicate_mods
 
+_RE_ZIP_NAME = re.compile(r"错误报告-(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}-\d{1,2}-\d{4})_\d{1,2}\.\d{2}\.\d{2}\.zip")
+_CLEANUP_RATIO = 0.25
+
 
 class Handlers:
     def __init__(self, plugin):
         self.p = plugin
+        self.rate_limiter = RateLimiter()
 
     # ── helpers ──
 
     def _ai_failed(self, result: str) -> bool:
         return not result or result.strip() == "" or result.startswith(FAIL_PREFIXES)
 
+    _enrich_cache: tuple[str, str, str] | tuple = ()
+
     def _enrich(self, text: str, source: str) -> str:
+        details = extract_report_details(source)
         dup = check_duplicate_mods(self.p.dup_data, source)
-        result = enrich_solution(text, source)
+        result = enrich_solution(text, details)
         return f"{dup}\n\n{result}" if dup else result
 
     async def _send_img(self, event, md: str):
@@ -61,16 +69,16 @@ class Handlers:
 
         if fcs:
             sid = event.unified_msg_origin
+            self.p.recent.pop(sid, None)
             self.p.recent[sid] = fcs[0]
             if len(self.p.recent) > MAX_RECENT_FILES:
                 for k in list(self.p.recent)[:-RECENT_FILES_KEEP]:
                     del self.p.recent[k]
 
-        pat = r"错误报告-(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}-\d{1,2}-\d{4})_\d{1,2}\.\d{2}\.\d{2}\.zip"
         for fc in fcs:
             fn = fc.name or ""
             if fn.endswith(".zip"):
-                if re.match(pat, fn):
+                if _RE_ZIP_NAME.match(fn):
                     async for r in self._handle_error_report(event, fc):
                         yield r
                 else:
@@ -117,14 +125,20 @@ class Handlers:
         if self._ai_failed(ai):
             sol = search_local_solutions(self.p.solutions, error_text)
             if sol:
-                result = self._enrich(f"**📖 本地匹配到解决方案**\n\n{sol}", error_text)
+                details = extract_report_details(error_text)
+                result = enrich_solution(f"**📖 本地匹配到解决方案**\n\n{sol}", details)
                 async for r in self._send_img(event, result):
                     yield r
                 return
             yield event.plain_result(ai or "无法获取解决方案，请稍后重试。")
             return
 
-        result = self._enrich(ai[:md], error_text)
+        details = extract_report_details(error_text)
+        result = enrich_solution(ai[:md], details)
+        dup = check_duplicate_mods(self.p.dup_data, error_text)
+        if dup:
+            result = f"{dup}\n\n{result}"
+
         ek = extract_error_key(error_text)
         sc = self._cfg("auto_save_category", "AI生成")
         if ek and not self.p.get_solution(ek):
@@ -244,6 +258,11 @@ class Handlers:
         if self.p.blacklist.is_blacklisted(uid):
             yield event.plain_result("你已被限制使用此功能。")
             return
+
+        if not self.rate_limiter.allow(uid):
+            yield event.plain_result("请求过于频繁，请稍后再试。")
+            return
+
         yield event.plain_result("正在下载并分析错误报告...")
 
         url = getattr(fc, "url", None) or getattr(fc, "file", None)
@@ -276,12 +295,12 @@ class Handlers:
                 return
             if zpath.exists():
                 zpath.unlink()
-        except zipfile.BadZipFile:
-            yield event.plain_result("压缩包损坏，无法解压。")
+        except (zipfile.BadZipFile, ValueError, ConnectionError):
+            yield event.plain_result("压缩包无效或无法访问，请检查文件来源。")
             return
         except Exception as e:
             logger.error(f"解压异常: {e}")
-            yield event.plain_result(f"解压失败：{str(e)}")
+            yield event.plain_result("解压失败，请稍后重试。")
             return
         finally:
             if zpath.exists():
@@ -299,14 +318,22 @@ class Handlers:
         if self._ai_failed(ai):
             local = search_local_solutions(self.p.solutions, logs)
             if local:
-                result = self._enrich(f"**✅ 本地匹配到解决方案**\n\n{local}", logs)
+                details = extract_report_details(logs)
+                result = enrich_solution(f"**✅ 本地匹配到解决方案**\n\n{local}", details)
+                dup = check_duplicate_mods(self.p.dup_data, logs)
+                if dup:
+                    result = f"{dup}\n\n{result}"
                 async for r in self._send_img(event, result):
                     yield r
                 return
             yield event.plain_result(ai or "无法获取解决方案。")
             return
 
-        result = self._enrich(ai[:md], source)
+        details = extract_report_details(source)
+        result = enrich_solution(ai[:md], details)
+        dup = check_duplicate_mods(self.p.dup_data, source)
+        if dup:
+            result = f"{dup}\n\n{result}"
 
         if "ConcurrentModificationException" in logs:
             cme_log = edir / "CMESuckMyDuck.log"
@@ -341,22 +368,32 @@ class Handlers:
         dst.mkdir(parents=True, exist_ok=True)
 
         exts = self.p.get_user_cfg(uid, "save_exts", [".log", ".txt", ".json"])
+        root = extract_dir.resolve()
         log_dir = dst / "原始log"
         log_dir.mkdir(parents=True, exist_ok=True)
         for f in extract_dir.rglob("*"):
-            if f.is_file() and f.suffix.lower() in exts:
+            if not f.is_file() or f.suffix.lower() not in exts:
+                continue
+            if f.is_symlink():
                 try:
-                    c = f.read_text(encoding="utf-8", errors="ignore")
-                    if not c.strip():
+                    resolved = f.resolve()
+                    if not str(resolved).startswith(str(root)):
                         continue
-                    (log_dir / f.name).write_text(c, encoding="utf-8")
-                except Exception as e:
-                    logger.debug(f"保存日志失败: {e}")
+                except Exception:
+                    continue
+            try:
+                c = f.read_text(encoding="utf-8", errors="ignore")
+                if not c.strip():
+                    continue
+                (log_dir / f.name).write_text(c, encoding="utf-8")
+            except Exception as e:
+                logger.debug(f"保存日志失败: {e}")
 
         if self.p.get_user_cfg(uid, "save_analysis", True):
             (dst / "分析结果.md").write_text(analysis, encoding="utf-8")
 
-        self._cleanup_old_reports(uid)
+        if random.random() < _CLEANUP_RATIO:
+            self._cleanup_old_reports(uid)
 
     def _cleanup_old_reports(self, uid: str):
         try:
@@ -364,10 +401,16 @@ class Handlers:
             if not folder.is_dir():
                 return
             days = self._cfg("max_report_age_days", 7)
-            cutoff = time.time() - days * 86400
+            now = time.time()
+            cutoff = now - days * 86400
             for d in folder.iterdir():
-                if d.is_dir() and d.stat().st_mtime < cutoff:
-                    shutil.rmtree(d, ignore_errors=True)
-                    logger.info(f"清理过期报告: {d.name}")
+                if d.is_dir():
+                    try:
+                        st = d.stat()
+                        if st.st_mtime < cutoff:
+                            shutil.rmtree(d, ignore_errors=True)
+                            logger.info(f"清理过期报告: {d.name}")
+                    except OSError:
+                        pass
         except Exception as e:
             logger.debug(f"清理旧报告失败: {e}")
