@@ -31,6 +31,7 @@ class McHelperPlugin(Star):
             shutil.copy2(str(solutions_src), str(self.solutions_db_path))
 
         self.solutions_db = self._load_solutions_db()
+        self._recent_files: dict[str, File] = {}
         logger.info(f"MC Helper 插件已加载，本地方案库共 {self._count_solutions()} 条，配置项 {len(config) if config else 0} 个")
 
     def _cfg(self, key: str, default):
@@ -88,6 +89,10 @@ class McHelperPlugin(Star):
                     if isinstance(replied_comp, File):
                         file_comps.append(replied_comp)
 
+        if file_comps:
+            session_id = event.unified_msg_origin
+            self._recent_files[session_id] = file_comps[0]
+
         for file_comp in file_comps:
             file_name = file_comp.name or ""
             zip_pattern = r"错误报告-2026-\d{1,2}-\d{1,2}_\d{2}\.\d{2}\.\d{2}\.zip"
@@ -129,9 +134,18 @@ class McHelperPlugin(Star):
                         if isinstance(replied_comp, File):
                             file_comp = replied_comp
                             break
+                    if file_comp:
+                        break
                 if isinstance(comp, File):
                     file_comp = comp
                     break
+
+        # 如果引用中未获取到文件，降级为自动使用最近的文件
+        if not file_comp:
+            session_id = event.unified_msg_origin
+            file_comp = self._recent_files.get(session_id)
+            if file_comp:
+                yield event.plain_result("未检测到引用的文件，自动使用最近上传的文件...")
 
         if file_comp:
             async for result in self._handle_error_report(event, file_comp):
