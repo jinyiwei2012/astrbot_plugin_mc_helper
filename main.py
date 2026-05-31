@@ -1,4 +1,5 @@
 import asyncio
+import json
 import shutil
 from pathlib import Path
 
@@ -32,6 +33,8 @@ class McHelperPlugin(Star):
         self.blacklist = UserBlacklist(self.store_path / "user_blacklist.json")
         self.reports_path = Path(__file__).parent / "data" / "错误报告"
         self.reports_path.mkdir(parents=True, exist_ok=True)
+        self.user_cfg_path = self.store_path / "user_config.json"
+        self.user_configs: dict = self._load_user_configs()
         self.recent: dict[str, File] = {}
         self.handlers = Handlers(self)
 
@@ -70,6 +73,33 @@ class McHelperPlugin(Star):
     async def ask_ai(self, event: AstrMessageEvent, text: str) -> str:
         return await ask_ai(self.context, event, text)
 
+    # ── per-user config ──
+
+    def _load_user_configs(self) -> dict:
+        try:
+            if self.user_cfg_path.exists():
+                with open(self.user_cfg_path, "r", encoding="utf-8") as f:
+                    return dict(json.load(f))
+        except Exception as e:
+            logger.error(f"加载用户配置失败: {e}")
+        return {}
+
+    def _save_user_configs(self):
+        try:
+            with open(self.user_cfg_path, "w", encoding="utf-8") as f:
+                json.dump(self.user_configs, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"保存用户配置失败: {e}")
+
+    def get_user_cfg(self, uid: str, key: str, default):
+        return self.user_configs.get(uid, {}).get(key, default)
+
+    def set_user_cfg(self, uid: str, key: str, value):
+        if uid not in self.user_configs:
+            self.user_configs[uid] = {}
+        self.user_configs[uid][key] = value
+        self._save_user_configs()
+
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
         async for r in self.handlers.on_message(event):
@@ -93,6 +123,11 @@ class McHelperPlugin(Star):
     @filter.command("mc_reports")
     async def mc_reports(self, event: AstrMessageEvent):
         async for r in self.handlers.mc_reports(event):
+            yield r
+
+    @filter.command("mc_config")
+    async def mc_config(self, event: AstrMessageEvent, args: str = ""):
+        async for r in self.handlers.mc_config(event, args):
             yield r
 
     async def terminate(self):

@@ -89,8 +89,9 @@ class Handlers:
             "1. 上传错误报告：直接发送 PCL/PCLCE 导出的错误报告压缩包，自动分析\n"
             "2. 手动查询：/mc_check <错误信息>\n"
             "3. 添加方案：/mc_add_solution <错误关键词> <解决方案>\n"
-            "4. 查看历史：/mc_reports\n"
-            "5. 查看帮助：/mc_help"
+            "4. 个人配置：/mc_config\n"
+            "5. 查看历史：/mc_reports\n"
+            "6. 查看帮助：/mc_help"
         )
 
     # ── mc_check ──
@@ -176,6 +177,48 @@ class Handlers:
         result += "\n报告保存在 `data/错误报告/<用户>/<时间>/` 目录下，超期自动清理。"
         async for r in self._send_img(event, result):
             yield r
+
+    # ── mc_config ──
+
+    async def mc_config(self, event: AstrMessageEvent, args: str = ""):
+        uid = event.unified_msg_origin
+        parts = args.strip().split(maxsplit=2)
+
+        if not args or parts[0] == "view":
+            exts = self.p.get_user_cfg(uid, "save_exts", None)
+            anl = self.p.get_user_cfg(uid, "save_analysis", None)
+            result = "**⚙️ 个人配置**\n\n"
+            result += f"- 保存原始文件类型: `{exts or '.log/.txt/.json'}`\n"
+            result += f"- 保存分析结果: `{'开启' if anl or anl is None else '关闭'}`\n"
+            result += "\n**修改方法：**\n"
+            result += "`/mc_config save_exts .log,.txt`  — 设置保存的文件类型\n"
+            result += "`/mc_config save_analysis on`  — 开启保存分析结果\n"
+            result += "`/mc_config save_analysis off` — 关闭保存分析结果\n"
+            result += "`/mc_config view` — 查看当前配置\n"
+            async for r in self._send_img(event, result):
+                yield r
+            return
+
+        if len(parts) < 2:
+            yield event.plain_result("用法：/mc_config <键> <值>\n/mc_config view 查看当前配置")
+            return
+
+        key, val = parts[1], parts[2] if len(parts) > 2 else ""
+        if key == "save_exts":
+            exts = [e.strip() for e in val.split(",") if e.strip()]
+            self.p.set_user_cfg(uid, "save_exts", exts)
+            yield event.plain_result(f"已设置保存文件类型: {exts}")
+        elif key == "save_analysis":
+            if val.lower() in ("on", "true", "1", "yes"):
+                self.p.set_user_cfg(uid, "save_analysis", True)
+                yield event.plain_result("已开启保存分析结果")
+            elif val.lower() in ("off", "false", "0", "no"):
+                self.p.set_user_cfg(uid, "save_analysis", False)
+                yield event.plain_result("已关闭保存分析结果")
+            else:
+                yield event.plain_result("值应为 on/off")
+        else:
+            yield event.plain_result(f"未知配置项: {key}")
 
     # ── file lookup ──
 
@@ -297,10 +340,11 @@ class Handlers:
         dst = self.p.reports_path / uid / ts
         dst.mkdir(parents=True, exist_ok=True)
 
+        exts = self.p.get_user_cfg(uid, "save_exts", [".log", ".txt", ".json"])
         log_dir = dst / "原始log"
         log_dir.mkdir(parents=True, exist_ok=True)
         for f in extract_dir.rglob("*"):
-            if f.is_file() and f.suffix in (".log", ".txt", ".json"):
+            if f.is_file() and f.suffix.lower() in exts:
                 try:
                     c = f.read_text(encoding="utf-8", errors="ignore")
                     if not c.strip():
@@ -309,7 +353,8 @@ class Handlers:
                 except Exception as e:
                     logger.debug(f"保存日志失败: {e}")
 
-        (dst / "分析结果.md").write_text(analysis, encoding="utf-8")
+        if self.p.get_user_cfg(uid, "save_analysis", True):
+            (dst / "分析结果.md").write_text(analysis, encoding="utf-8")
 
         self._cleanup_old_reports(uid)
 
