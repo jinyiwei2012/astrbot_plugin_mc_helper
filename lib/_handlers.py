@@ -2,6 +2,7 @@
 
 import re
 import shutil
+import time
 import zipfile
 from pathlib import Path
 
@@ -88,7 +89,8 @@ class Handlers:
             "1. 上传错误报告：直接发送 PCL/PCLCE 导出的错误报告压缩包，自动分析\n"
             "2. 手动查询：/mc_check <错误信息>\n"
             "3. 添加方案：/mc_add_solution <错误关键词> <解决方案>\n"
-            "4. 查看帮助：/mc_help"
+            "4. 查看历史：/mc_reports\n"
+            "5. 查看帮助：/mc_help"
         )
 
     # ── mc_check ──
@@ -103,7 +105,9 @@ class Handlers:
             return
 
         if not error_text or error_text.strip() == "":
-            yield event.plain_result("用法：/mc_check <错误信息>\n直接发送错误报告压缩包即可自动分析。")
+            yield event.plain_result(
+                "用法：/mc_check <错误信息>\n直接发送错误报告压缩包即可自动分析。\n历史报告查询：/mc_reports"
+            )
             return
 
         ai = await self.p.ask_ai(event, error_text)
@@ -145,6 +149,28 @@ class Handlers:
         _, ek, sol = parts
         await self.p.save_solution(ek.strip(), sol.strip(), "用户添加")
         yield event.plain_result(f"已添加解决方案：{ek}")
+
+    # ── mc_reports ──
+
+    async def mc_reports(self, event: AstrMessageEvent):
+        uid = event.unified_msg_origin
+        folder = self.p.reports_path / uid
+        if not folder.is_dir():
+            yield event.plain_result("暂无历史分析记录。")
+            return
+        files = sorted(folder.iterdir(), key=lambda f: f.stat().st_mtime, reverse=True)[:10]
+        if not files:
+            yield event.plain_result("暂无历史分析记录。")
+            return
+        result = "**📋 最近的分析报告**\n\n"
+        for f in files:
+            ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(f.stat().st_mtime))
+            size = f.stat().st_size
+            label = f.stem[:40]
+            result += f"- `{label}` ({size}KB, {ts})\n"
+        result += "\n报告保存在 `data/错误报告/<用户>/` 目录下，超期自动清理。"
+        async for r in self._send_img(event, result):
+            yield r
 
     # ── file lookup ──
 
@@ -256,4 +282,37 @@ class Handlers:
             async for r in self._send_img(event, f"**🤖 AI 分析结果**\n\n{result}"):
                 yield r
 
+        self._save_report(uid, edir)
         shutil.rmtree(edir, ignore_errors=True)
+
+    # ── report persistence ──
+
+    def _save_report(self, uid: str, extract_dir: Path):
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        dst = self.p.reports_path / uid
+        dst.mkdir(parents=True, exist_ok=True)
+        for f in extract_dir.rglob("*"):
+            if f.is_file() and f.suffix in (".log", ".txt", ".json"):
+                try:
+                    c = f.read_text(encoding="utf-8", errors="ignore")
+                    if not c.strip():
+                        continue
+                    stem = f.stem[:40]
+                    new_name = f"{stem}_{ts}{f.suffix}"
+                    (dst / new_name).write_text(c, encoding="utf-8")
+                except Exception as e:
+                    logger.debug(f"保存报告文件失败: {e}")
+        self._cleanup_old_reports(uid)
+
+    def _cleanup_old_reports(self, uid: str):
+        try:
+            folder = self.p.reports_path / uid
+            if not folder.is_dir():
+                return
+            days = self._cfg("max_report_age_days", 7)
+            cutoff = time.time() - days * 86400
+            for f in folder.iterdir():
+                if f.is_file() and f.stat().st_mtime < cutoff:
+                    f.unlink(missing_ok=True)
+        except Exception as e:
+            logger.debug(f"清理旧报告失败: {e}")

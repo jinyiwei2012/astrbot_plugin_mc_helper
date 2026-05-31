@@ -90,5 +90,10 @@ class McHelperPlugin(Star):
         async for r in self.handlers.mc_add_solution(event):
             yield r
 
+    @filter.command("mc_reports")
+    async def mc_reports(self, event: AstrMessageEvent):
+        async for r in self.handlers.mc_reports(event):
+            yield r
+
     async def terminate(self):
         logger.info("MC Helper 已卸载")
