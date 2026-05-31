@@ -74,6 +74,11 @@ _SKIP_MOD_ID = {
     "io",
     "pl",
 }
+_FAIL_PREFIXES = (
+    "无法获取 AI 模型",
+    "AI 未能生成有效的解决方案",
+    "AI 分析调用失败",
+)
 
 try:
     import markdown as _md_lib
@@ -208,43 +213,30 @@ class McHelperPlugin(Star):
             found_by_name = [name for name in ([current] + aliases) if name.lower() in error_text.lower()]
 
             if len(set(matched_jars)) >= 2 or len(set(matched_paths)) >= 2:
-                result = f"**⚠️ 检测到同一类模组出现多个：{', '.join(found_by_name)}**\n\n"
-                result += f"{group.get('note', '')}\n"
-                if matched_paths:
-                    result += "\n**检测到的冲突文件：**\n"
-                    for p in set(matched_paths):
-                        result += f"- `{p}`\n"
-                elif matched_jars:
-                    unique_jars = list(set(matched_jars))[:5]
-                    result += "\n**检测到的冲突文件：**\n"
-                    for j in unique_jars:
-                        result += f"- `{j}`\n"
-                result += (
-                    f"\n**如何清理**\n"
-                    f"1. 打开 `.minecraft/mods` 文件夹（PCL 里点「设置」→「模组文件夹」）\n"
-                    f"2. 在文件夹里搜索上面列出的文件名，把旧版/别名版删掉\n"
-                    f"3. 只保留 `{current}`，删完重启游戏\n\n"
-                    f"👉 {group.get('recommendation', '只保留一个')}\n\n"
-                    f"**常见文件名示例：**\n"
-                )
-                examples = group.get("examples", [])
-                result += "\n".join(f"- `{e}`" for e in examples[:3])
-                return result
+                matched = set(matched_paths) or set(matched_jars)
+                file_list = "\n".join(f"- `{x}`" for x in list(matched)[:5])
+            elif len(set(found_by_name)) >= 2:
+                matched = set()
+                file_list = ""
+            else:
+                continue
 
-            if len(set(found_by_name)) >= 2:
-                examples = group.get("examples", [])
-                ex = "\n".join(f"- `{e}`" for e in examples[:3])
-                return (
-                    f"**⚠️ 检测到同一类模组出现多个："
-                    f"{', '.join(found_by_name)}**\n\n"
-                    f"{group.get('note', '')}\n\n"
-                    f"**如何清理**\n"
-                    f"1. 打开 `.minecraft/mods` 文件夹（PCL 里点「模组文件夹」就能直达）\n"
-                    f"2. 搜索上面提到的文件名，把旧版/别名版删掉，只保留 `{current}`\n"
-                    f"3. 删完重启游戏\n\n"
-                    f"👉 {group.get('recommendation', '只保留一个')}\n\n"
-                    f"**常见文件名示例：**\n{ex}"
-                )
+            result = f"**⚠️ 检测到同一类模组出现多个：{', '.join(found_by_name)}**\n\n"
+            result += f"{group.get('note', '')}\n"
+            if matched:
+                result += f"\n**检测到的冲突文件：**\n{file_list}\n"
+            result += (
+                f"\n**如何清理**\n"
+                f"1. 打开 `.minecraft/mods` 文件夹（PCL 里点「设置」→「模组文件夹」）\n"
+                f"2. 搜索上面提到的文件名，把旧版/别名版删掉，只保留 `{current}`\n"
+                f"3. 删完重启游戏\n\n"
+                f"👉 {group.get('recommendation', '只保留一个')}\n\n"
+                f"**常见文件名示例：**\n"
+            )
+            examples = group.get("examples", [])
+            result += "\n".join(f"- `{e}`" for e in examples[:3])
+            return result
+
         return None
 
     def _get_solution(self, key: str) -> Optional[str]:
@@ -369,12 +361,7 @@ class McHelperPlugin(Star):
         ai_result = await self._ask_ai_with_context(event, error_text)
         max_display = self._cfg("ai_result_max_chars", 2000)
 
-        fail_prefixes = (
-            "无法获取 AI 模型",
-            "AI 未能生成有效的解决方案",
-            "AI 分析调用失败",
-        )
-        ai_failed = not ai_result or ai_result.strip() == "" or ai_result.startswith(fail_prefixes)
+        ai_failed = not ai_result or ai_result.strip() == "" or ai_result.startswith(_FAIL_PREFIXES)
 
         if ai_failed:
             solution = self._search_local_solutions(error_text)
@@ -565,12 +552,7 @@ class McHelperPlugin(Star):
             ai_result = await self._ask_ai_with_context(event, ai_source)
             max_display = self._cfg("ai_result_max_chars", 2000)
 
-            fail_prefixes = (
-                "无法获取 AI 模型",
-                "AI 未能生成有效的解决方案",
-                "AI 分析调用失败",
-            )
-            ai_failed = not ai_result or ai_result.strip() == "" or ai_result.startswith(fail_prefixes)
+            ai_failed = not ai_result or ai_result.strip() == "" or ai_result.startswith(_FAIL_PREFIXES)
 
             if ai_failed:
                 local_solution = self._search_local_solutions(error_logs)
@@ -796,77 +778,87 @@ class McHelperPlugin(Star):
         tips = []
 
         if details:
+
+            def _val(d):
+                return d.split("：", 1)[1] if "：" in d else ""
+
+            tip_rules = [
+                (
+                    ("涉及文件", "涉及模组"),
+                    lambda d: (
+                        f"打开 .minecraft/mods 文件夹，找到上面对应的文件，"
+                        f"{'、'.join([f for f in _val(d).replace('、', ' ').split() if '.jar' in f.lower()][:3])}"
+                        f"。检查是否需要删除旧版或解决冲突。"
+                    ),
+                ),
+                (
+                    ("坐标",),
+                    lambda d: (
+                        f"前往坐标 {_val(d)} 检查。如果是方块实体崩溃，拆掉该位置的方块；"
+                        f"如果是实体崩溃，用 /kill @e 清除附近的实体。"
+                    ),
+                ),
+                (
+                    ("内存",),
+                    lambda d: (
+                        f"当前内存分配为 {_val(d)}。如果游戏卡顿或内存不足，"
+                        f"在 PCL 设置中将内存调大（如 4096MB 或 6144MB）。"
+                    ),
+                ),
+                (
+                    ("Java 版本",),
+                    lambda d: (
+                        f"当前 Java 版本为 {_val(d)}。如果遇到不兼容错误，"
+                        f"在 PCL 设置中更换 Java 版本（MC 1.17+ 需要 Java 17 或 21）。"
+                    ),
+                ),
+                (
+                    ("服务器",),
+                    lambda d: (
+                        f"服务器地址：{_val(d)}。如果是连接问题，检查地址是否正确、服务器是否开启、网络是否正常。"
+                    ),
+                ),
+                (
+                    ("退出代码",),
+                    lambda d: (
+                        f"退出代码 {_val(d)}。请对照本地方案库中的 Exit Code 相关条目排查，"
+                        f"通常与内存、显卡驱动或 Java 配置有关。"
+                    ),
+                ),
+                (
+                    ("重复模组",),
+                    lambda d: (
+                        "检测到重复模组！打开 .minecraft/mods 文件夹，搜到上面对应的文件名，只保留一个版本，删除其余。"
+                    ),
+                ),
+            ]
+
             for d in details:
-                if d.startswith("涉及文件") or d.startswith("涉及模组"):
-                    files = d.split("：")[1] if "：" in d else ""
-                    tip_parts = []
-                    for f in files.replace("、", " ").split():
-                        if ".jar" in f.lower():
-                            tip_parts.append(f)
-                    if tip_parts:
+                for prefixes, handler in tip_rules:
+                    if d.startswith(prefixes):
+                        result_text = handler(d)
+                        if result_text:
+                            tips.append(result_text)
+                        break
+                else:
+                    if d.startswith("路径") and ".mca" in d:
                         tips.append(
-                            "打开 .minecraft/mods 文件夹，找到上面对应的文件，"
-                            + "、".join(tip_parts[:3])
-                            + "。检查是否需要删除旧版或解决冲突。"
+                            "发现区块文件(.mca)损坏，用 MCA Selector 打开该文件，"
+                            "找到损坏的区块并删除（游戏会自动重新生成）。"
                         )
-
-            if d.startswith("坐标"):
-                coord = d.split("：")[1] if "：" in d else ""
-                tips.append(
-                    f"前往坐标 {coord} 检查。如果是方块实体崩溃，拆掉该位置的方块；"
-                    "如果是实体崩溃，用 /kill @e 清除附近的实体。"
-                )
-
-            if d.startswith("内存"):
-                val = d.split("：")[1] if "：" in d else ""
-                tips.append(
-                    f"当前内存分配为 {val}。如果游戏卡顿或内存不足，在 PCL 设置中将内存调大（如 4096MB 或 6144MB）。"
-                )
-
-            if d.startswith("Java 版本"):
-                ver = d.split("：")[1] if "：" in d else ""
-                tips.append(
-                    f"当前 Java 版本为 {ver}。如果遇到不兼容错误，"
-                    "在 PCL 设置中更换 Java 版本（MC 1.17+ 需要 Java 17 或 21）。"
-                )
-
-            if d.startswith("服务器"):
-                srv = d.split("：")[1] if "：" in d else ""
-                tips.append(f"服务器地址：{srv}。如果是连接问题，检查地址是否正确、服务器是否开启、网络是否正常。")
-
-            if d.startswith("路径") and ".mca" in d:
-                tips.append(
-                    "发现区块文件(.mca)损坏，用 MCA Selector 打开该文件，找到损坏的区块并删除（游戏会自动重新生成）。"
-                )
-
-            if d.startswith("路径") and ".json" in d:
-                tips.append("发现配置文件(.json)异常，尝试删除该配置文件（游戏会自动重建默认配置）。")
-
-            if d.startswith("异常位置"):
-                try:
-                    loc = d.split("：")[1] if "：" in d else ""
-                    cls = loc.split("(")[0].strip() if "(" in loc else loc
-                    short = cls.split(".")[-1] if "." in cls else cls
-                    tips.append(f"错误出现在 {short} 类中。如果该类和模组相关，尝试更新或删除对应的模组。")
-                except Exception:
-                    pass
-
-            if d.startswith("系统"):
-                sys_text = d.split("：")[1] if "：" in d else ""
-                if "linux" in sys_text.lower() or "mac" in sys_text.lower():
-                    tips.append("你正在使用非 Windows 系统，某些模组可能不兼容。检查模组是否支持你的操作系统。")
-
-            if d.startswith("退出代码"):
-                ec = d.split("：")[1] if "：" in d else ""
-                tips.append(
-                    f"退出代码 {ec}。请对照本地方案库中的 Exit Code 相关条目排查，"
-                    "通常与内存、显卡驱动或 Java 配置有关。"
-                )
-
-            if d.startswith("重复模组"):
-                tips.append(
-                    "检测到重复模组！打开 .minecraft/mods 文件夹，搜到上面对应的文件名，只保留一个版本，删除其余。"
-                )
+                    elif d.startswith("路径") and ".json" in d:
+                        tips.append("发现配置文件(.json)异常，尝试删除该配置文件（游戏会自动重建默认配置）。")
+                    elif d.startswith("异常位置"):
+                        try:
+                            loc = _val(d)
+                            cls = loc.split("(")[0].strip() if "(" in loc else loc
+                            short = cls.split(".")[-1] if "." in cls else cls
+                            tips.append(f"错误出现在 {short} 类中。如果该类和模组相关，尝试更新或删除对应的模组。")
+                        except Exception:
+                            pass
+                    elif d.startswith("系统"):
+                        if "linux" in _val(d).lower() or "mac" in _val(d).lower():
+                            tips.append("你正在使用非 Windows 系统，某些模组可能不兼容。检查模组是否支持你的操作系统。")
 
         result += "\n\n---"
         if details:
