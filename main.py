@@ -98,10 +98,8 @@ class McHelperPlugin(Star):
             zip_pattern = r"错误报告-2026-\d{1,2}-\d{1,2}_\d{2}\.\d{2}\.\d{2}\.zip"
             if file_name.endswith(".zip"):
                 if re.match(zip_pattern, file_name):
-                    yield event.plain_result(
-                        "检测到 PCL 错误报告压缩包。\n"
-                        "请引用该文件并发送 /mc_check 开始分析。"
-                    )
+                    async for result in self._handle_error_report(event, file_comp):
+                        yield result
                     return
                 else:
                     yield event.plain_result(
@@ -115,11 +113,10 @@ class McHelperPlugin(Star):
     async def mc_help(self, event: AstrMessageEvent):
         yield event.plain_result(
             "MC 错误报告分析插件使用说明：\n"
-            "1. 上传错误报告：发送 PCL/PCLCE 导出的「错误报告-2026-日期.zip」\n"
-            "2. 确认分析：引用该文件并发送 /mc_check\n"
-            "3. 手动查询：/mc_check <错误信息>\n"
-            "4. 添加方案：/mc_add_solution <错误关键词> <解决方案>\n"
-            "5. 查看帮助：/mc_help"
+            "1. 上传错误报告：发送 PCL/PCLCE 导出的「错误报告-2026-日期.zip」，自动分析\n"
+            "2. 手动查询：/mc_check <错误信息>\n"
+            "3. 添加方案：/mc_add_solution <错误关键词> <解决方案>\n"
+            "4. 查看帮助：/mc_help"
         )
 
     @filter.command("mc_check")
@@ -154,9 +151,8 @@ class McHelperPlugin(Star):
 
         if not error_text or error_text.strip() == "":
             yield event.plain_result(
-                "用法：\n"
-                "1. 引用错误报告压缩包并发送 /mc_check 进行分析\n"
-                "2. 或发送 /mc_check <错误信息> 手动查询"
+                "用法：/mc_check <错误信息>\n"
+                "直接发送错误报告压缩包即可自动分析。"
             )
             return
 
