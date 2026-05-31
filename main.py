@@ -18,18 +18,20 @@ class McHelperPlugin(Star):
         super().__init__(context)
         self.config = config
 
-        self.data_path = StarTools.get_data_dir("astrbot_plugin_mc_helper")
-        self.data_path.mkdir(parents=True, exist_ok=True)
+        self.store_path = StarTools.get_data_dir("astrbot_plugin_mc_helper")
+        self.store_path.mkdir(parents=True, exist_ok=True)
         self._lock = asyncio.Lock()
 
         src = Path(__file__).parent / "data" / "solutions.json"
-        self.db_path = self.data_path / "solutions.json"
+        self.db_path = self.store_path / "solutions.json"
         if not self.db_path.exists() and src.exists():
             shutil.copy2(src, self.db_path)
 
         self.solutions = load_db(self.db_path)
         self.dup_data = load_duplicate_mods(Path(__file__).parent / "data" / "duplicate_mods.json")
-        self.blacklist = UserBlacklist(self.data_path / "user_blacklist.json")
+        self.blacklist = UserBlacklist(self.store_path / "user_blacklist.json")
+        self.reports_path = Path(__file__).parent / "data" / "错误报告"
+        self.reports_path.mkdir(parents=True, exist_ok=True)
         self.recent: dict[str, File] = {}
         self.handlers = Handlers(self)
 

@@ -177,8 +177,7 @@ class Handlers:
             yield event.plain_result("无法获取文件下载链接。")
             return
 
-        rd = self.p.data_path / "错误报告"
-        rd.mkdir(parents=True, exist_ok=True)
+        rd = self.p.reports_path
         zname = fc.name or "unknown.zip"
         zpath = rd / zname
         edir = rd / Path(zname).stem
