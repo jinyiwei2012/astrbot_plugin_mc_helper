@@ -1,6 +1,7 @@
 """Zip security scanning and user blacklist management."""
 
 import json
+import re
 from pathlib import Path
 
 import aiohttp
@@ -8,6 +9,13 @@ import aiohttp
 from astrbot.api import logger
 
 from ._utils import BLACKLIST_EXTS, DANGEROUS_CMDS
+
+
+def _clean_fn(name: str) -> str:
+    """Remove trailing spaces/dots and control characters from a filename."""
+    cleaned = name.rstrip(" .")
+    cleaned = re.sub(r"[\x00-\x1f\x7f]", "", cleaned)
+    return cleaned
 
 
 async def download_zip(file_url: str, zip_path: Path, timeout_sec: int = 120):
@@ -33,13 +41,20 @@ def scan_zip(zip_path: Path) -> list[str]:
         for info in infos:
             if info.is_dir():
                 continue
-            fn = info.filename.rstrip(" .")
-            if fn.startswith("/") or "/../" in fn or fn == ".." or fn.startswith("../"):
+            fn = info.filename
+            cleaned = _clean_fn(fn)
+            if (
+                cleaned == ""
+                or cleaned.startswith("/")
+                or cleaned.startswith("..")
+                or "/../" in cleaned
+                or re.match(r"^\.{3,}/", cleaned)
+            ):
                 blacklisted.append(fn)
                 continue
-            ext = Path(fn).suffix.lower()
+            ext = Path(cleaned).suffix.lower()
             if ext in BLACKLIST_EXTS:
-                blacklisted.append(fn)
+                blacklisted.append(info.filename)
             elif ext == ".json":
                 try:
                     raw = zf.read(info)
@@ -61,7 +76,9 @@ def extract_safe_files(zip_path: Path, extract_dir: Path) -> int:
         for info in zf.infolist():
             if info.is_dir():
                 continue
-            filename = info.filename.rstrip(" .")
+            filename = _clean_fn(info.filename)
+            if not filename or filename.startswith(".."):
+                continue
             ext = Path(filename).suffix.lower()
             if ext not in (".log", ".txt", ".json"):
                 continue
