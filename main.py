@@ -442,6 +442,26 @@ class McHelperPlugin(Star):
                             yield event.plain_result("压缩包包含无效的路径，已拒绝解压。")
                             shutil.rmtree(extract_dir, ignore_errors=True)
                             return
+                        ext = Path(filename).suffix.lower()
+                        if ext in (
+                            ".exe",
+                            ".bat",
+                            ".cmd",
+                            ".com",
+                            ".msi",
+                            ".scr",
+                            ".ps1",
+                            ".sh",
+                            ".bin",
+                            ".dll",
+                            ".so",
+                            ".dylib",
+                            ".vbs",
+                            ".js",
+                        ):
+                            yield event.plain_result(f"压缩包包含可执行文件（{filename}），已拒绝解压。")
+                            shutil.rmtree(extract_dir, ignore_errors=True)
+                            return
                         target_path = (extract_dir / filename).resolve()
                         if not str(target_path).startswith(str(extract_dir.resolve())):
                             yield event.plain_result("压缩包包含无效的路径，已拒绝解压。")
