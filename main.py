@@ -137,23 +137,14 @@ class McHelperPlugin(Star):
         return {"mod_groups": []}
 
     def _check_duplicate_mods(self, error_text: str) -> str | None:
-        jar_pattern = re.compile(r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", re.IGNORECASE)
-        found_jars = jar_pattern.findall(error_text)
-        filepath_pattern = re.compile(
-            r"[\w\\/.\-+]*mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
-            re.IGNORECASE,
-        )
-        found_paths = filepath_pattern.findall(error_text)
-        dup_section = re.search(
-            r"Duplicate\s*Mod[s]?[:\s]*\n((?:.{0,200}\n?){0,15})",
-            error_text,
-            re.IGNORECASE,
-        )
+        found_jars = _RE_JAR_NAME.findall(error_text)
+        found_paths = _RE_JAR_PATH.findall(error_text)
+        dup_section = _RE_DUP_SECTION.search(error_text)
         if dup_section and not found_paths:
             section = dup_section.group(1)
-            found_paths = filepath_pattern.findall(section)
+            found_paths = _RE_JAR_PATH.findall(section)
             if not found_paths:
-                found_paths = jar_pattern.findall(section)
+                found_paths = _RE_JAR_NAME.findall(section)
 
         for group in self.duplicate_mods_data.get("mod_groups", []):
             current = group.get("current", "")
@@ -607,33 +598,17 @@ class McHelperPlugin(Star):
             details.append("涉及模组：" + ", ".join(set(mod_names[:3])))
 
         mod_ids = set()
-        for m in re.findall(r"([a-z_]+:[a-z_]+)", error_text):
+        for m in _RE_MOD_ID.findall(error_text):
             parts = m.split(":")
-            if parts[0] not in (
-                "minecraft",
-                "java",
-                "net",
-                "com",
-                "org",
-                "cpw",
-                "it",
-                "de",
-                "fr",
-                "io",
-                "pl",
-            ):
+            if parts[0] not in _SKIP_MOD_ID:
                 mod_ids.add(m)
         mod_id_list = sorted(mod_ids)[:4]
         if mod_id_list:
             details.append("涉及模组 ID：" + "、".join(mod_id_list))
 
-        dup_section = re.search(
-            r"Duplicate\s*Mod[s]?[:\s]*\n((?:.{0,300}\n?){0,15})",
-            error_text,
-            re.IGNORECASE,
-        )
+        dup_section = _RE_DUP_SECTION.search(error_text)
         if dup_section:
-            dup_files = re.findall(r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", dup_section.group(1))
+            dup_files = _RE_JAR_NAME.findall(dup_section.group(1))
             if dup_files:
                 details.append("重复模组：" + "、".join(set(dup_files[:5])))
 
@@ -641,18 +616,13 @@ class McHelperPlugin(Star):
         if exit_code:
             details.append("退出代码：Exit Code " + exit_code.group(1))
 
-        exception = re.search(r"(?:Caused by|Description)[:\s]*([^\n]+)", error_text)
+        exception = _RE_EXCEPTION.search(error_text)
         if exception:
             msg = exception.group(1).strip()
             if msg and len(msg) < 120:
                 details.append("错误信息：{}".format(msg))
 
-        error_keyword = re.search(
-            r"(java\.\w+(?:\.\w+)+Error|java\.\w+(?:\.\w+)+Exception|"
-            r"IllegalStateException|NullPointerException|"
-            r"ConcurrentModificationException)[:\s]*([^\n]*)",
-            error_text,
-        )
+        error_keyword = _RE_ERROR_CLS.search(error_text)
         if error_keyword:
             ex_type = error_keyword.group(1).split(".")[-1]
             ex_msg = error_keyword.group(2).strip()[:80] if error_keyword.group(2) else ""
@@ -674,27 +644,19 @@ class McHelperPlugin(Star):
         if memory:
             details.append("内存：{} {}".format(memory[0][0], memory[0][1]))
 
-        servers = re.findall(
-            r"(?:^|\n)(?:Server|Server IP|Host|Server Address)[:\s]*([\w.\-]+(?::\d+)?)",
-            error_text,
-            re.IGNORECASE,
-        )
+        servers = _RE_SERVER.findall(error_text)
         if servers:
             details.append("服务器：{}".format(servers[0]))
 
-        paths = re.findall(
-            r"(?:\.minecraft[\\/](?!libraries)[\w\\/.\-]+(?:\.log|\.txt|\.json|\.jar|\.zip|\.mca))",
-            error_text,
-            re.IGNORECASE,
-        )
+        paths = _RE_PATH.findall(error_text)
         if paths:
             details.append("路径：{}".format(paths[0]))
 
-        java_versions = re.findall(r"Java\s*(?:Version|VM|Runtime)[:\s]*([\d.]+)", error_text, re.IGNORECASE)
+        java_versions = _RE_JAVA.findall(error_text)
         if java_versions:
             details.append("Java 版本：{}".format(java_versions[0]))
 
-        os_info = re.findall(r"Operating\s+System[:\s]*([^\n]+)", error_text, re.IGNORECASE)
+        os_info = _RE_OS.findall(error_text)
         if os_info:
             details.append("系统：{}".format(os_info[0].strip()))
 
@@ -702,12 +664,15 @@ class McHelperPlugin(Star):
 
     def _enrich_solution(self, solution: str, error_text: str) -> str:
         details = self._extract_report_details(error_text)
-        if not details:
-            return solution
 
-        result = solution + "\n\n【错误详情】\n" + "\n".join(details)
+        result = solution + "\n\n---"
 
-        tips = []
+        if details:
+            result += "\n\n**📋 错误详情**"
+            for d in details:
+                result += "\n- " + d
+
+            tips = []
 
         for d in details:
             if d.startswith("涉及文件") or d.startswith("涉及模组"):
