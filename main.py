@@ -1,8 +1,9 @@
 import re
-import os
 import json
+import time
 import zipfile
 import shutil
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -21,23 +22,36 @@ class McHelperPlugin(Star):
         super().__init__(context)
         self.config = config
 
-        plugin_data_path = Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_mc_helper"
-        plugin_data_path.mkdir(parents=True, exist_ok=True)
+        self.plugin_data_path = (
+            Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_mc_helper"
+        )
+        self.plugin_data_path.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
 
         solutions_src = Path(__file__).parent / "data" / "solutions.json"
-        self.solutions_db_path = plugin_data_path / "solutions.json"
+        self.solutions_db_path = self.plugin_data_path / "solutions.json"
 
         if not self.solutions_db_path.exists() and solutions_src.exists():
-            shutil.copy2(str(solutions_src), str(self.solutions_db_path))
+            shutil.copy2(solutions_src, self.solutions_db_path)
 
         self.solutions_db = self._load_solutions_db()
+        self.duplicate_mods_data = self._load_duplicate_mods()
         self._recent_files: dict[str, File] = {}
-        logger.info(f"MC Helper 插件已加载，本地方案库共 {self._count_solutions()} 条，配置项 {len(config) if config else 0} 个")
+        logger.info(
+            f"MC Helper 插件已加载，本地方案库共 {self._count_solutions()} 条，配置项 {len(config) if config else 0} 个"
+        )
 
     def _cfg(self, key: str, default):
         if self.config and key in self.config:
             return self.config[key]
         return default
+
+    def _is_allowed_group(self, event: AstrMessageEvent) -> bool:
+        whitelist = self._cfg("whitelist_groups", [])
+        if not whitelist:
+            return True
+        group_id = event.get_group_id()
+        return group_id in whitelist
 
     def _load_solutions_db(self) -> dict:
         if self.solutions_db_path.exists():
@@ -47,6 +61,106 @@ class McHelperPlugin(Star):
             except Exception as e:
                 logger.error(f"加载解决方案库失败: {e}")
         return {}
+
+    def _load_duplicate_mods(self) -> dict:
+        path = Path(__file__).parent / "data" / "duplicate_mods.json"
+        try:
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.error(f"加载重复模组对照表失败: {e}")
+        return {"mod_groups": []}
+
+    def _check_duplicate_mods(self, error_text: str) -> str | None:
+        jar_pattern = re.compile(
+            r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", re.IGNORECASE
+        )
+        found_jars = jar_pattern.findall(error_text)
+        filepath_pattern = re.compile(
+            r"[\w\\/.\-+]*mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
+            re.IGNORECASE,
+        )
+        found_paths = filepath_pattern.findall(error_text)
+        dup_section = re.search(
+            r"Duplicate\s*Mod[s]?[:\s]*\n((?:.{0,200}\n?){0,15})",
+            error_text,
+            re.IGNORECASE,
+        )
+        if dup_section and not found_paths:
+            section = dup_section.group(1)
+            found_paths = filepath_pattern.findall(section)
+            if not found_paths:
+                found_paths = jar_pattern.findall(section)
+
+        for group in self.duplicate_mods_data.get("mod_groups", []):
+            current = group.get("current", "")
+            aliases = group.get("aliases", [])
+            all_names = [s.lower() for s in ([current] + aliases)]
+            matched_jars = []
+            matched_paths = []
+
+            for j in found_jars:
+                j_lower = j.lower()
+                for name in all_names:
+                    if name.lower() in j_lower:
+                        matched_jars.append(j)
+                        break
+
+            for p in found_paths:
+                p_lower = p.lower()
+                for name in all_names:
+                    if name.lower() in p_lower:
+                        matched_paths.append(p)
+                        break
+
+            found_by_name = [
+                name
+                for name in ([current] + aliases)
+                if name.lower() in error_text.lower()
+            ]
+
+            if len(set(matched_jars)) >= 2 or len(set(matched_paths)) >= 2:
+                result = (
+                    f"**⚠️ 检测到同一类模组出现多个：{', '.join(found_by_name)}**\n\n"
+                )
+                result += f"{group.get('note', '')}\n"
+                if matched_paths:
+                    result += "\n**检测到的冲突文件：**\n"
+                    for p in set(matched_paths):
+                        result += f"- `{p}`\n"
+                elif matched_jars:
+                    unique_jars = list(set(matched_jars))[:5]
+                    result += "\n**检测到的冲突文件：**\n"
+                    for j in unique_jars:
+                        result += f"- `{j}`\n"
+                result += (
+                    f"\n**如何清理**\n"
+                    f"1. 打开 `.minecraft/mods` 文件夹（PCL 里点「设置」→「模组文件夹」）\n"
+                    f"2. 在文件夹里搜索上面列出的文件名，把旧版/别名版删掉\n"
+                    f"3. 只保留 `{current}`，删完重启游戏\n\n"
+                    f"👉 {group.get('recommendation', '只保留一个')}\n\n"
+                    f"**常见文件名示例：**\n"
+                )
+                examples = group.get("examples", [])
+                result += "\n".join(f"- `{e}`" for e in examples[:3])
+                return result
+
+            if len(set(found_by_name)) >= 2:
+                examples = group.get("examples", [])
+                ex = "\n".join(f"- `{e}`" for e in examples[:3])
+                return (
+                    f"**⚠️ 检测到同一类模组出现多个："
+                    f"{', '.join(found_by_name)}**\n\n"
+                    f"{group.get('note', '')}\n\n"
+                    f"**如何清理**\n"
+                    f"1. 打开 `.minecraft/mods` 文件夹（PCL 里点「模组文件夹」就能直达）\n"
+                    f"2. 搜索上面提到的文件名，把旧版/别名版删掉，只保留 `{current}`\n"
+                    f"3. 删完重启游戏\n\n"
+                    f"👉 {group.get('recommendation', '只保留一个')}\n\n"
+                    f"**常见文件名示例：**\n{ex}"
+                )
+        return None
 
     def _get_solution(self, key: str) -> Optional[str]:
         for category, entries in self.solutions_db.items():
@@ -65,17 +179,22 @@ class McHelperPlugin(Star):
         return count
 
     def _set_solution(self, key: str, solution: str, category: str = "AI生成"):
-        if category not in self.solutions_db:
-            self.solutions_db[category] = {}
-        self.solutions_db[category][key] = {"solution": solution}
-        try:
-            with open(self.solutions_db_path, "w", encoding="utf-8") as f:
-                json.dump(self.solutions_db, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"保存解决方案库失败: {e}")
+        with self._lock:
+            old_db = json.loads(json.dumps(self.solutions_db))
+            try:
+                if category not in self.solutions_db:
+                    self.solutions_db[category] = {}
+                self.solutions_db[category][key] = {"solution": solution}
+                with open(self.solutions_db_path, "w", encoding="utf-8") as f:
+                    json.dump(self.solutions_db, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                self.solutions_db = old_db
+                logger.error(f"保存解决方案库失败: {e}")
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
+        if not self._is_allowed_group(event):
+            return
         message_obj = event.message_obj
         if not message_obj:
             return
@@ -111,6 +230,8 @@ class McHelperPlugin(Star):
 
     @filter.command("mc_help")
     async def mc_help(self, event: AstrMessageEvent):
+        if not self._is_allowed_group(event):
+            return
         yield event.plain_result(
             "MC 错误报告分析插件使用说明：\n"
             "1. 上传错误报告：发送 PCL/PCLCE 导出的「错误报告-2026-日期.zip」，自动分析\n"
@@ -121,6 +242,8 @@ class McHelperPlugin(Star):
 
     @filter.command("mc_check")
     async def mc_check(self, event: AstrMessageEvent, error_text: str = ""):
+        if not self._is_allowed_group(event):
+            return
         # 先检查消息中是否有引用的文件（包括回复/引用消息中的文件）
         file_comp = None
         message_obj = event.message_obj
@@ -142,7 +265,9 @@ class McHelperPlugin(Star):
             session_id = event.unified_msg_origin
             file_comp = self._recent_files.get(session_id)
             if file_comp:
-                yield event.plain_result("未检测到引用的文件，自动使用最近上传的文件...")
+                yield event.plain_result(
+                    "未检测到引用的文件，自动使用最近上传的文件..."
+                )
 
         if file_comp:
             async for result in self._handle_error_report(event, file_comp):
@@ -151,28 +276,66 @@ class McHelperPlugin(Star):
 
         if not error_text or error_text.strip() == "":
             yield event.plain_result(
-                "用法：/mc_check <错误信息>\n"
-                "直接发送错误报告压缩包即可自动分析。"
+                "用法：/mc_check <错误信息>\n直接发送错误报告压缩包即可自动分析。"
             )
             return
 
-        solution = self._search_local_solutions(error_text)
-        if solution:
-            yield event.plain_result(f"本地匹配到解决方案：\n{solution}")
-        else:
-            ai_result = await self._ask_ai_with_context(event, error_text)
-            max_display = self._cfg("ai_result_max_chars", 2000)
+        ai_result = await self._ask_ai_with_context(event, error_text)
+        max_display = self._cfg("ai_result_max_chars", 2000)
 
-            error_key = self._extract_error_key(error_text)
-            save_cat = self._cfg("auto_save_category", "AI生成")
-            if error_key and not self._get_solution(error_key):
-                self._set_solution(error_key, ai_result, category=save_cat)
-                yield event.plain_result(f"AI 分析结果：\n{ai_result[:max_display]}\n\n（已自动保存到本地知识库）")
-            else:
-                yield event.plain_result(f"AI 分析结果：\n{ai_result[:max_display]}")
+        fail_prefixes = (
+            "无法获取 AI 模型",
+            "AI 未能生成有效的解决方案",
+            "AI 分析调用失败",
+        )
+        ai_failed = (
+            not ai_result
+            or ai_result.strip() == ""
+            or ai_result.startswith(fail_prefixes)
+        )
+
+        if ai_failed:
+            solution = self._search_local_solutions(error_text)
+            if solution:
+                dup_warning = self._check_duplicate_mods(error_text)
+                result = self._enrich_solution(
+                    f"**📖 本地匹配到解决方案**\n\n{solution}", error_text
+                )
+                if dup_warning:
+                    result = f"{dup_warning}\n\n{result}"
+                async for r in self._send_md_image(event, result):
+                    yield r
+                return
+
+            yield event.plain_result(ai_result or "无法获取解决方案，请稍后重试。")
+            return
+
+        dup_warning = self._check_duplicate_mods(error_text)
+        result_text = self._enrich_solution(ai_result[:max_display], error_text)
+        if dup_warning:
+            result_text = f"{dup_warning}\n\n{result_text}"
+
+        error_key = self._extract_error_key(error_text)
+        save_cat = self._cfg("auto_save_category", "AI生成")
+        if error_key and not self._get_solution(error_key):
+            self._set_solution(error_key, ai_result, category=save_cat)
+            async for r in self._send_md_image(
+                event,
+                f"**🤖 AI 分析结果**\n\n{result_text}\n\n*（已自动保存到本地知识库）*",
+            ):
+                yield r
+        else:
+            async for r in self._send_md_image(
+                event, f"**🤖 AI 分析结果**\n\n{result_text}"
+            ):
+                yield r
 
     @filter.command("mc_add_solution")
-    async def mc_add_solution(self, event: AstrMessageEvent, error_keyword: str, solution_text: str):
+    async def mc_add_solution(
+        self, event: AstrMessageEvent, error_keyword: str, solution_text: str
+    ):
+        if not self._is_allowed_group(event):
+            return
         if not error_keyword or not solution_text:
             yield event.plain_result("用法：/mc_add_solution <错误关键词> <解决方案>")
             return
@@ -188,13 +351,12 @@ class McHelperPlugin(Star):
             yield event.plain_result("无法获取文件下载链接，请确认文件已上传成功。")
             return
 
-        plugin_data_path = Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_mc_helper"
-        reports_dir = plugin_data_path / "错误报告"
+        reports_dir = self.plugin_data_path / "错误报告"
         reports_dir.mkdir(parents=True, exist_ok=True)
 
-        zip_name = file_comp.name or f"错误报告-unknown.zip"
-        zip_path = str(reports_dir / zip_name)
-        extract_dir = str(reports_dir / Path(zip_name).stem)
+        zip_name = file_comp.name or "错误报告-unknown.zip"
+        zip_path = reports_dir / zip_name
+        extract_dir = reports_dir / Path(zip_name).stem
 
         try:
             timeout_sec = self._cfg("download_timeout", 120)
@@ -208,23 +370,29 @@ class McHelperPlugin(Star):
                     with open(zip_path, "wb") as f:
                         f.write(await resp.read())
 
-            os.makedirs(extract_dir, exist_ok=True)
+            extract_dir.mkdir(parents=True, exist_ok=True)
 
             try:
                 with zipfile.ZipFile(zip_path, "r") as zf:
-                    zf.extractall(extract_dir)
+                    for info in zf.infolist():
+                        target_path = (extract_dir / info.filename).resolve()
+                        if not str(target_path).startswith(str(extract_dir.resolve())):
+                            yield event.plain_result(
+                                "压缩包包含无效的路径，已拒绝解压。"
+                            )
+                            shutil.rmtree(extract_dir, ignore_errors=True)
+                            return
+                        zf.extract(info, extract_dir)
             except zipfile.BadZipFile:
                 yield event.plain_result("压缩包损坏，无法解压。请检查文件。")
                 return
+            finally:
+                if zip_path.exists():
+                    zip_path.unlink()
 
             error_logs = self._collect_logs(extract_dir)
             if not error_logs:
                 yield event.plain_result("压缩包中未找到日志文件。")
-                return
-
-            local_solution = self._search_local_solutions(error_logs)
-            if local_solution:
-                yield event.plain_result(f"✅ 本地匹配到解决方案：\n{local_solution}")
                 return
 
             latest_log = self._collect_latest_log(extract_dir)
@@ -238,79 +406,139 @@ class McHelperPlugin(Star):
             ai_result = await self._ask_ai_with_context(event, ai_source)
             max_display = self._cfg("ai_result_max_chars", 2000)
 
+            fail_prefixes = (
+                "无法获取 AI 模型",
+                "AI 未能生成有效的解决方案",
+                "AI 分析调用失败",
+            )
+            ai_failed = (
+                not ai_result
+                or ai_result.strip() == ""
+                or ai_result.startswith(fail_prefixes)
+            )
+
+            if ai_failed:
+                local_solution = self._search_local_solutions(error_logs)
+                if local_solution:
+                    dup_warning = self._check_duplicate_mods(error_logs)
+                    result = self._enrich_solution(
+                        f"**✅ 本地匹配到解决方案**\n\n{local_solution}",
+                        error_logs,
+                    )
+                    if dup_warning:
+                        result = f"{dup_warning}\n\n{result}"
+                    async for r in self._send_md_image(event, result):
+                        yield r
+                    return
+
+                yield event.plain_result(ai_result or "无法获取解决方案，请稍后重试。")
+                return
+
+            dup_warning = self._check_duplicate_mods(ai_source)
+            result_text = self._enrich_solution(ai_result[:max_display], ai_source)
+            if dup_warning:
+                result_text = f"{dup_warning}\n\n{result_text}"
+
             error_key = self._extract_error_key(error_logs)
             save_cat = self._cfg("auto_save_category", "AI生成")
             if error_key and not self._get_solution(error_key):
                 self._set_solution(error_key, ai_result, category=save_cat)
-                yield event.plain_result(f"AI 分析结果：\n{ai_result[:max_display]}\n\n（已自动保存到本地知识库）")
+                async for r in self._send_md_image(
+                    event,
+                    f"**🤖 AI 分析结果**\n\n{result_text}\n\n*（已自动保存到本地知识库）*",
+                ):
+                    yield r
             else:
-                yield event.plain_result(f"AI 分析结果：\n{ai_result[:max_display]}")
+                async for r in self._send_md_image(
+                    event, f"**🤖 AI 分析结果**\n\n{result_text}"
+                ):
+                    yield r
 
         except Exception as e:
             logger.error(f"处理错误报告时异常: {e}")
             yield event.plain_result(f"处理过程中出现错误：{str(e)}")
+        finally:
+            self._cleanup_old_files()
 
-    def _collect_logs(self, extract_dir: str) -> str:
+    def _cleanup_old_files(self):
+        try:
+            reports_dir = self.plugin_data_path / "错误报告"
+            if not reports_dir.is_dir():
+                return
+            max_age_days = self._cfg("max_report_age_days", 7)
+            cutoff = time.time() - max_age_days * 86400
+            for item in reports_dir.iterdir():
+                try:
+                    mtime = item.stat().st_mtime
+                    if mtime < cutoff:
+                        if item.is_dir():
+                            shutil.rmtree(item, ignore_errors=True)
+                        else:
+                            item.unlink(missing_ok=True)
+                        logger.info(f"清理旧错误报告文件: {item.name}")
+                except Exception as e:
+                    logger.debug(f"清理文件 {item.name} 时出错: {e}")
+        except Exception as e:
+            logger.debug(f"清理旧文件时出错: {e}")
+
+    def _collect_logs(self, extract_dir: Path) -> str:
         logs = []
-        for root, _, files in os.walk(extract_dir):
-            for f in files:
-                if f.endswith((".log", ".txt", ".crash", ".json")):
-                    file_path = os.path.join(root, f)
-                    try:
-                        with open(file_path, "r", encoding="utf-8", errors="ignore") as lf:
-                            content = lf.read()
-                            if content.strip():
-                                logs.append(f"=== {f} ===\n{content}\n")
-                    except Exception as e:
-                        logger.error(f"读取文件 {f} 失败: {e}")
+        for f in extract_dir.rglob("*"):
+            if f.is_file() and f.suffix in (".log", ".txt", ".crash", ".json"):
+                try:
+                    content = f.read_text(encoding="utf-8", errors="ignore")
+                    if content.strip():
+                        logs.append(f"=== {f.name} ===\n{content}\n")
+                except Exception as e:
+                    logger.error(f"读取文件 {f.name} 失败: {e}")
 
-        crash_report_dir = os.path.join(extract_dir, "crash-reports")
-        if os.path.isdir(crash_report_dir):
-            for root, _, files in os.walk(crash_report_dir):
-                for f in files:
-                    file_path = os.path.join(root, f)
+        crash_report_dir = extract_dir / "crash-reports"
+        if crash_report_dir.is_dir():
+            for f in crash_report_dir.rglob("*"):
+                if f.is_file():
                     try:
-                        with open(file_path, "r", encoding="utf-8", errors="ignore") as lf:
-                            content = lf.read()
-                            if content.strip():
-                                logs.append(f"=== crash-reports/{f} ===\n{content}\n")
+                        content = f.read_text(encoding="utf-8", errors="ignore")
+                        if content.strip():
+                            logs.append(f"=== crash-reports/{f.name} ===\n{content}\n")
                     except Exception as e:
-                        logger.error(f"读取崩溃报告 {f} 失败: {e}")
+                        logger.error(f"读取崩溃报告 {f.name} 失败: {e}")
 
-        logs_dir = os.path.join(extract_dir, "logs")
-        if os.path.isdir(logs_dir):
-            for root, _, files in os.walk(logs_dir):
-                for f in files:
-                    file_path = os.path.join(root, f)
+        logs_dir = extract_dir / "logs"
+        if logs_dir.is_dir():
+            for f in logs_dir.rglob("*"):
+                if f.is_file():
                     try:
-                        with open(file_path, "r", encoding="utf-8", errors="ignore") as lf:
-                            content = lf.read()
-                            if content.strip():
-                                logs.append(f"=== logs/{f} ===\n{content}\n")
+                        content = f.read_text(encoding="utf-8", errors="ignore")
+                        if content.strip():
+                            logs.append(f"=== logs/{f.name} ===\n{content}\n")
                     except Exception as e:
-                        logger.error(f"读取日志 {f} 失败: {e}")
+                        logger.error(f"读取日志 {f.name} 失败: {e}")
 
         return "\n".join(logs)
 
-    def _collect_latest_log(self, extract_dir: str) -> str:
-        logs_dir = os.path.join(extract_dir, "logs")
-        latest_log_path = os.path.join(logs_dir, "latest.log")
-        if os.path.isfile(latest_log_path):
+    def _collect_latest_log(self, extract_dir: Path) -> str:
+        crash_output_path = extract_dir / "游戏崩溃前的输出.txt"
+        if crash_output_path.is_file():
             try:
-                with open(latest_log_path, "r", encoding="utf-8", errors="ignore") as f:
-                    return f.read()
+                content = crash_output_path.read_text(encoding="utf-8", errors="ignore")
+                if content.strip():
+                    return content
+            except Exception as e:
+                logger.error(f"读取 游戏崩溃前的输出.txt 失败: {e}")
+
+        latest_log_path = extract_dir / "logs" / "latest.log"
+        if latest_log_path.is_file():
+            try:
+                return latest_log_path.read_text(encoding="utf-8", errors="ignore")
             except Exception as e:
                 logger.error(f"读取 latest.log 失败: {e}")
-        for root, _, files in os.walk(extract_dir):
-            for f in files:
-                if f == "latest.log":
-                    file_path = os.path.join(root, f)
-                    try:
-                        with open(file_path, "r", encoding="utf-8", errors="ignore") as lf:
-                            return lf.read()
-                    except Exception as e:
-                        logger.error(f"读取 {f} 失败: {e}")
-                        return ""
+        for f in extract_dir.rglob("latest.log"):
+            if f.is_file():
+                try:
+                    return f.read_text(encoding="utf-8", errors="ignore")
+                except Exception as e:
+                    logger.error(f"读取 {f.name} 失败: {e}")
+                    return ""
         return ""
 
     def _search_local_solutions(self, error_text: str) -> Optional[str]:
@@ -330,6 +558,251 @@ class McHelperPlugin(Star):
                         return solution
 
         return None
+
+    def _extract_report_details(self, error_text: str) -> list[str]:
+        details = []
+
+        jar_pattern = re.compile(
+            r"[\w\\/.\-+]*mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
+            re.IGNORECASE,
+        )
+        jar_paths = jar_pattern.findall(error_text)
+        if jar_paths:
+            details.append("涉及文件：" + "、".join(set(jar_paths[:3])))
+
+        mod_names = re.findall(
+            r"(?:Mod|Mod File|File):\s*([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
+            error_text,
+        )
+        if mod_names and not jar_paths:
+            details.append("涉及模组：" + ", ".join(set(mod_names[:3])))
+
+        mod_ids = set()
+        for m in re.findall(r"([a-z_]+:[a-z_]+)", error_text):
+            parts = m.split(":")
+            if parts[0] not in (
+                "minecraft",
+                "java",
+                "net",
+                "com",
+                "org",
+                "cpw",
+                "it",
+                "de",
+                "fr",
+                "io",
+                "pl",
+            ):
+                mod_ids.add(m)
+        mod_id_list = sorted(mod_ids)[:4]
+        if mod_id_list:
+            details.append("涉及模组 ID：" + "、".join(mod_id_list))
+
+        dup_section = re.search(
+            r"Duplicate\s*Mod[s]?[:\s]*\n((?:.{0,300}\n?){0,15})",
+            error_text,
+            re.IGNORECASE,
+        )
+        if dup_section:
+            dup_files = re.findall(
+                r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", dup_section.group(1)
+            )
+            if dup_files:
+                details.append("重复模组：" + "、".join(set(dup_files[:5])))
+
+        exit_code = re.search(r"Exit Code[:\s]*(-?\d+)", error_text)
+        if exit_code:
+            details.append("退出代码：Exit Code " + exit_code.group(1))
+
+        exception = re.search(r"(?:Caused by|Description)[:\s]*([^\n]+)", error_text)
+        if exception:
+            msg = exception.group(1).strip()
+            if msg and len(msg) < 120:
+                details.append("错误信息：{}".format(msg))
+
+        error_keyword = re.search(
+            r"(java\.\w+(?:\.\w+)+Error|java\.\w+(?:\.\w+)+Exception|"
+            r"IllegalStateException|NullPointerException|"
+            r"ConcurrentModificationException)[:\s]*([^\n]*)",
+            error_text,
+        )
+        if error_keyword:
+            ex_type = error_keyword.group(1).split(".")[-1]
+            ex_msg = (
+                error_keyword.group(2).strip()[:80] if error_keyword.group(2) else ""
+            )
+            if ex_msg:
+                details.append("异常：{} - {}".format(ex_type, ex_msg))
+            else:
+                details.append("异常：{}".format(ex_type))
+
+        skip_patterns = (
+            "cpw.mods.modlauncher",
+            "cpw.mods.bootstraplauncher",
+            "java.lang",
+            "jdk.internal",
+            "sun.reflect",
+            "net.minecraft.launchwrapper",
+            "org.spongepowered.asm",
+            "net.minecraftforge.fml.loading",
+        )
+        all_stacks = re.findall(r"at\s+([\w.]+)\(([^:]+:\d+)\)", error_text)
+        meaningful = [s for s in all_stacks if not s[0].startswith(skip_patterns)]
+        if meaningful:
+            details.append(
+                "异常位置：{} ({})".format(meaningful[0][0], meaningful[0][1])
+            )
+
+        coords = re.findall(
+            r"(?:Tile Entity at|Block at|Position)\s*\[?(-?\d+)[,; ]\s*(-?\d+)[,; ]\s*(-?\d+)\]?",
+            error_text,
+        )
+        if coords:
+            details.append(
+                "坐标：({}, {}, {})".format(coords[0][0], coords[0][1], coords[0][2])
+            )
+
+        memory = re.findall(r"(\d+)\s*(MB|GB|MiB|GiB)", error_text, re.IGNORECASE)
+        if memory:
+            details.append("内存：{} {}".format(memory[0][0], memory[0][1]))
+
+        servers = re.findall(
+            r"(?:^|\n)(?:Server|Server IP|Host|Server Address)[:\s]*([\w.\-]+(?::\d+)?)",
+            error_text,
+            re.IGNORECASE,
+        )
+        if servers:
+            details.append("服务器：{}".format(servers[0]))
+
+        paths = re.findall(
+            r"(?:\.minecraft[\\/](?!libraries)[\w\\/.\-]+(?:\.log|\.txt|\.json|\.jar|\.zip|\.mca))",
+            error_text,
+            re.IGNORECASE,
+        )
+        if paths:
+            details.append("路径：{}".format(paths[0]))
+
+        java_versions = re.findall(
+            r"Java\s*(?:Version|VM|Runtime)[:\s]*([\d.]+)", error_text, re.IGNORECASE
+        )
+        if java_versions:
+            details.append("Java 版本：{}".format(java_versions[0]))
+
+        os_info = re.findall(
+            r"Operating\s+System[:\s]*([^\n]+)", error_text, re.IGNORECASE
+        )
+        if os_info:
+            details.append("系统：{}".format(os_info[0].strip()))
+
+        return details
+
+    def _enrich_solution(self, solution: str, error_text: str) -> str:
+        details = self._extract_report_details(error_text)
+        if not details:
+            return solution
+
+        result = solution + "\n\n【错误详情】\n" + "\n".join(details)
+
+        tips = []
+
+        for d in details:
+            if d.startswith("涉及文件") or d.startswith("涉及模组"):
+                files = d.split("：")[1] if "：" in d else ""
+                tip_parts = []
+                for f in files.replace("、", " ").split():
+                    if ".jar" in f.lower():
+                        tip_parts.append(f)
+                if tip_parts:
+                    tips.append(
+                        "打开 .minecraft/mods 文件夹，找到上面对应的文件，"
+                        + "、".join(tip_parts[:3])
+                        + "。检查是否需要删除旧版或解决冲突。"
+                    )
+
+            if d.startswith("坐标"):
+                coord = d.split("：")[1] if "：" in d else ""
+                tips.append(
+                    f"前往坐标 {coord} 检查。如果是方块实体崩溃，拆掉该位置的方块；"
+                    "如果是实体崩溃，用 /kill @e 清除附近的实体。"
+                )
+
+            if d.startswith("内存"):
+                val = d.split("：")[1] if "：" in d else ""
+                tips.append(
+                    f"当前内存分配为 {val}。如果游戏卡顿或内存不足，"
+                    "在 PCL 设置中将内存调大（如 4096MB 或 6144MB）。"
+                )
+
+            if d.startswith("Java 版本"):
+                ver = d.split("：")[1] if "：" in d else ""
+                tips.append(
+                    f"当前 Java 版本为 {ver}。如果遇到不兼容错误，"
+                    "在 PCL 设置中更换 Java 版本（MC 1.17+ 需要 Java 17 或 21）。"
+                )
+
+            if d.startswith("服务器"):
+                srv = d.split("：")[1] if "：" in d else ""
+                tips.append(
+                    f"服务器地址：{srv}。如果是连接问题，检查地址是否正确、"
+                    "服务器是否开启、网络是否正常。"
+                )
+
+            if d.startswith("路径") and ".mca" in d:
+                tips.append(
+                    "发现区块文件(.mca)损坏，用 MCA Selector 打开该文件，"
+                    "找到损坏的区块并删除（游戏会自动重新生成）。"
+                )
+
+            if d.startswith("路径") and ".json" in d:
+                tips.append(
+                    "发现配置文件(.json)异常，尝试删除该配置文件（游戏会自动重建默认配置）。"
+                )
+
+            if d.startswith("异常位置"):
+                try:
+                    loc = d.split("：")[1] if "：" in d else ""
+                    cls = loc.split("(")[0].strip() if "(" in loc else loc
+                    short = cls.split(".")[-1] if "." in cls else cls
+                    tips.append(
+                        f"错误出现在 {short} 类中。如果该类和模组相关，"
+                        "尝试更新或删除对应的模组。"
+                    )
+                except Exception:
+                    pass
+
+            if d.startswith("系统"):
+                sys_text = d.split("：")[1] if "：" in d else ""
+                if "linux" in sys_text.lower() or "mac" in sys_text.lower():
+                    tips.append(
+                        "你正在使用非 Windows 系统，某些模组可能不兼容。"
+                        "检查模组是否支持你的操作系统。"
+                    )
+
+            if d.startswith("退出代码"):
+                ec = d.split("：")[1] if "：" in d else ""
+                tips.append(
+                    f"退出代码 {ec}。请对照本地方案库中的 Exit Code 相关条目排查，"
+                    "通常与内存、显卡驱动或 Java 配置有关。"
+                )
+
+            if d.startswith("重复模组"):
+                tips.append(
+                    "检测到重复模组！打开 .minecraft/mods 文件夹，"
+                    "搜到上面对应的文件名，只保留一个版本，删除其余。"
+                )
+
+        result += "\n\n---"
+        if details:
+            result += "\n\n**📋 错误详情**"
+            for d in details:
+                result += "\n- " + d
+
+        if tips:
+            result += "\n\n**🔧 定位解决**"
+            for t in tips[:5]:
+                result += "\n- " + t
+
+        return result
 
     def _extract_error_key(self, error_text: str) -> Optional[str]:
         match = re.search(
@@ -351,20 +824,32 @@ class McHelperPlugin(Star):
 
         return None
 
-    async def _ask_ai_with_context(self, event: AstrMessageEvent, error_text: str) -> str:
+    async def _ask_ai_with_context(
+        self, event: AstrMessageEvent, error_text: str
+    ) -> str:
         try:
             umo = event.unified_msg_origin
             provider_id = await self.context.get_current_chat_provider_id(umo)
             if not provider_id:
                 return "无法获取 AI 模型，请确认已在 WebUI 中配置了 LLM 提供商。"
 
+            details = self._extract_report_details(error_text)
+            context_block = ""
+            if details:
+                context_block = (
+                    "从日志中提取的关键信息：\n" + "\n".join(details) + "\n\n"
+                )
+
             prompt = (
                 "你是一个专业的 Minecraft 技术支持专家。请分析以下 latest.log 中的错误信息并给出详细的解决方案。\n\n"
-                "请按以下格式回复：\n"
-                "【错误分析】简要说明错误原因\n"
-                "【解决方案】分步骤给出解决建议（按推荐程度排序）\n"
-                "【预防建议】如何避免类似问题\n\n"
-                f"错误信息（latest.log）：\n{error_text}"
+                "请使用 Markdown 格式回复，按以下结构：\n"
+                "## 错误分析\n"
+                "简要说明错误原因\n\n"
+                "## 解决方案\n"
+                "分步骤给出解决建议（按推荐程度排序），引用关键信息如坐标、文件路径、模组名称等\n\n"
+                "## 预防建议\n"
+                "如何避免类似问题\n\n"
+                f"{context_block}错误信息（latest.log）：\n{error_text}"
             )
 
             llm_resp = await self.context.llm_generate(
@@ -376,6 +861,240 @@ class McHelperPlugin(Star):
         except Exception as e:
             logger.error(f"AI 分析调用失败: {e}")
             return f"AI 分析调用失败：{str(e)}\n\n建议手动搜索错误信息中的关键词获取解决方案。"
+
+    def _md_to_image(self, md_text: str) -> str:
+        from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+        try:
+            font_bold = ImageFont.truetype("C:/Windows/Fonts/seguiib.ttf", 17)
+            font_normal = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 17)
+            font_code = ImageFont.truetype("C:/Windows/Fonts/consola.ttf", 15)
+            font_h2 = ImageFont.truetype("C:/Windows/Fonts/seguiib.ttf", 22)
+        except Exception:
+            font_normal = font_bold = font_code = font_h2 = ImageFont.load_default()
+
+        padding = 24
+        line_spacing = 6
+        max_w = 720
+        white = "#ffffff"
+        text_color = "#1a1a1a"
+        accent = "#1976d2"
+        code_bg = "#e8e8e8"
+        sep_color = "#cccccc"
+
+        lines = md_text.split("\n")
+        blocks = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if line.startswith("```"):
+                code_lines = []
+                i += 1
+                while i < len(lines) and not lines[i].startswith("```"):
+                    code_lines.append(lines[i])
+                    i += 1
+                blocks.append(("code", "\n".join(code_lines)))
+            elif line.startswith("## "):
+                blocks.append(("h2", line[3:]))
+            elif line.startswith("**") and line.endswith("**") and len(line) > 4:
+                blocks.append(("h2", line[2:-2]))
+            elif line.startswith("- "):
+                blocks.append(("li", line[2:]))
+            elif line.strip() == "---":
+                blocks.append(("sep", ""))
+            elif line.strip() == "":
+                blocks.append(("blank", ""))
+            else:
+                blocks.append(("p", line))
+            i += 1
+
+        rendered = []
+        for btype, btext in blocks:
+            if btype == "blank":
+                rendered.append(("blank", ""))
+                continue
+            segs = []
+            text = btext
+            inline_pattern = re.compile(
+                r"(\*\*(.+?)\*\*|`([^`]+)`|\*(.+?)\*|\[(.+?)\]\((.+?)\))"
+            )
+            last_end = 0
+            for m in inline_pattern.finditer(text):
+                if m.start() > last_end:
+                    segs.append(("text", text[last_end : m.start()]))
+                if m.group(2):
+                    segs.append(("bold", m.group(2)))
+                elif m.group(3):
+                    segs.append(("code", m.group(3)))
+                elif m.group(4):
+                    segs.append(("italic", m.group(4)))
+                elif m.group(5):
+                    segs.append(("link", m.group(5)))
+                last_end = m.end()
+            if last_end < len(text):
+                segs.append(("text", text[last_end:]))
+            rendered.append((btype, segs))
+
+        line_h = 26
+        gap = 8
+
+        def measure(s_type, s_text):
+            f = {
+                "bold": font_bold,
+                "text": font_normal,
+                "code": font_code,
+                "italic": font_normal,
+                "link": font_normal,
+            }.get(s_type, font_normal)
+            return f.getbbox(s_text)[2]
+
+        def wrap_segs(segs, max_w):
+            if not segs:
+                return [segs]
+            total_w = sum(measure(s[0], s[1]) for s in segs) + 4 * len(segs)
+            if total_w <= max_w:
+                return [segs]
+            lines_out = []
+            current_line = []
+            current_w = 0
+            for s in segs:
+                sw = measure(s[0], s[1]) + 4
+                if current_w + sw > max_w and current_line:
+                    lines_out.append(current_line)
+                    current_line = [s]
+                    current_w = sw
+                else:
+                    current_line.append(s)
+                    current_w += sw
+            if current_line:
+                lines_out.append(current_line)
+            return lines_out
+
+        y = padding
+        x = padding
+        content_w = max_w - 2 * padding
+        total_h_est = padding
+
+        for btype, content in rendered:
+            if btype == "blank":
+                total_h_est += gap
+            elif btype == "h2":
+                total_h_est += 34 + gap
+            elif btype == "code":
+                code_lines_count = content.count("\n") + 1
+                total_h_est += code_lines_count * 20 + 12 + gap
+            elif btype == "li":
+                segs_list = [content] if isinstance(content, str) else content
+                wrap_result = wrap_segs(
+                    [("text", segs_list)] if isinstance(segs_list, str) else segs_list,
+                    content_w - 20,
+                )
+                total_h_est += len(wrap_result) * line_h + gap
+            elif btype == "p":
+                segs_list = (
+                    content if isinstance(content, list) else [("text", str(content))]
+                )
+                wrap_result = wrap_segs(segs_list, content_w)
+                total_h_est += len(wrap_result) * line_h + gap
+            elif btype == "sep":
+                total_h_est += 12 + gap
+            total_h_est += line_spacing
+
+        total_h_est += padding
+        img_h = max(total_h_est, 200)
+        img = Image.new("RGB", (max_w, int(img_h)), white)
+        draw = ImageDraw.Draw(img)
+
+        y = padding
+        for btype, content in rendered:
+            if btype == "blank":
+                y += gap
+                continue
+            elif btype == "h2":
+                draw.text((x, y), content, font=font_h2, fill=accent)
+                y += 34 + gap
+            elif btype == "code":
+                code_lines = content.split("\n")
+                code_h = len(code_lines) * 20 + 12
+                draw.rounded_rectangle(
+                    [x, y, x + content_w, y + code_h], 4, fill=code_bg
+                )
+                for ci, cl in enumerate(code_lines):
+                    draw.text(
+                        (x + 10, y + 6 + ci * 20), cl, font=font_code, fill=text_color
+                    )
+                y += code_h + gap
+            elif btype == "li":
+                bullet_x = x
+                text_x = x + 20
+                segs = (
+                    content if isinstance(content, list) else [("text", str(content))]
+                )
+                wrap_lines = wrap_segs(segs, content_w - 20)
+                draw.text((bullet_x, y), "\u2022", font=font_normal, fill=text_color)
+                for wi, wl in enumerate(wrap_lines):
+                    lx = text_x if wi == 0 else x + 4
+                    for stype, stext in wl:
+                        f = {
+                            "bold": font_bold,
+                            "text": font_normal,
+                            "code": font_code,
+                            "italic": font_normal,
+                        }.get(stype, font_normal)
+                        fc = accent if stype == "link" else text_color
+                        if stype == "code":
+                            cw = f.getbbox(stext)[2]
+                            draw.rounded_rectangle(
+                                [lx - 1, y + 2, lx + cw + 3, y + line_h - 2],
+                                2,
+                                fill=code_bg,
+                            )
+                        draw.text((lx, y), stext, font=f, fill=fc)
+                        lx += measure(stype, stext) + 4
+                    y += line_h
+                y += gap
+            elif btype == "p":
+                segs = (
+                    content if isinstance(content, list) else [("text", str(content))]
+                )
+                wrap_lines = wrap_segs(segs, content_w)
+                for wl in wrap_lines:
+                    lx = x
+                    for stype, stext in wl:
+                        f = {
+                            "bold": font_bold,
+                            "text": font_normal,
+                            "code": font_code,
+                            "italic": font_normal,
+                        }.get(stype, font_normal)
+                        fc = accent if stype == "link" else text_color
+                        if stype == "code":
+                            cw = f.getbbox(stext)[2]
+                            draw.rounded_rectangle(
+                                [lx - 1, y + 2, lx + cw + 3, y + line_h - 2],
+                                2,
+                                fill=code_bg,
+                            )
+                        draw.text((lx, y), stext, font=f, fill=fc)
+                        lx += measure(stype, stext) + 4
+                    y += line_h
+                y += gap
+            elif btype == "sep":
+                draw.line([x, y + 6, x + content_w, y + 6], fill=sep_color, width=1)
+                y += 12 + gap
+            y += line_spacing
+
+        img = img.crop((0, 0, max_w, int(y + padding)))
+        img = img.filter(ImageFilter.SMOOTH_MORE)
+        out_dir = self.plugin_data_path / "screenshots"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = str(out_dir / f"report_{int(time.time())}.png")
+        img.save(out_path, "PNG")
+        return out_path
+
+    async def _send_md_image(self, event, md_text: str):
+        path = self._md_to_image(md_text)
+        yield event.make_result().file_image(path)
 
     async def terminate(self):
         logger.info("MC Helper 插件已卸载")

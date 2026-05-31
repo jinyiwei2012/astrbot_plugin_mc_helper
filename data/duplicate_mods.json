@@ -1,0 +1,344 @@
+{
+  "description": "常见重复安装/重命名/功能冲突的模组对照表。用于帮助识别 mods 文件夹中实际是同一个模组但用了不同名字的情况。",
+  "mod_groups": [
+    {
+      "id": "rendering_optimization",
+      "label": "渲染优化",
+      "note": "以下模组本质上是同一个东西的不同版本/分支，只应保留一个。可以理解成「同一个菜，不同厨师做的」。",
+      "current": "Embeddium",
+      "aliases": ["Rubidium", "Magnesium"],
+      "also_known_in_fabric": "Sodium",
+      "conflicts_with": ["OptiFine"],
+      "recommendation": "只保留 Embeddium（Forge）或 Sodium（Fabric），删除其他",
+      "examples": [
+        "embeddium-0.3.31+mc1.20.1.jar",
+        "rubidium-mc1.20.1-0.7.1a.jar",
+        "magnesium-mc1.20.1.jar"
+      ]
+    },
+    {
+      "id": "shader_loading",
+      "label": "光影加载",
+      "note": "以下模组都是用来加载光影包的，功能完全重叠。",
+      "current": "Oculus（Forge）/ Iris（Fabric）",
+      "aliases": ["Sulfuric"],
+      "conflicts_with": ["OptiFine（光影功能部分）"],
+      "recommendation": "Forge 用 Oculus，Fabric 用 Iris。不要和 OptiFine 同时装",
+      "examples": [
+        "oculus-mc1.20.1-1.7.0.jar",
+        "iris-mc1.20.1-1.7.0.jar",
+        "sulfuric-mc1.20.1.jar"
+      ]
+    },
+    {
+      "id": "memory_optimization",
+      "label": "内存优化",
+      "note": "以下模组都是优化内存使用的，功能重叠。",
+      "current": "FerriteCore",
+      "aliases": ["Hydrogen", "FoamFix"],
+      "conflicts_with": [],
+      "recommendation": "只保留 FerriteCore",
+      "examples": [
+        "ferritecore-6.0.1-forge.jar",
+        "hydrogen-mc1.20.1.jar",
+        "foamfix-0.10.15-1.20.1.jar"
+      ]
+    },
+    {
+      "id": "comprehensive_optimization",
+      "label": "综合优化/修复",
+      "note": "ModernFix 整合了多个老牌优化模组的功能，不需要再装下面的旧模组。",
+      "current": "ModernFix",
+      "aliases": ["VanillaFix", "Surge", "TexFix", "LazyDFU", "RandomPatches"],
+      "conflicts_with": [],
+      "recommendation": "只保留 ModernFix，删除所有旧模组",
+      "examples": [
+        "modernfix-forge-5.20.0+mc1.20.1.jar",
+        "vanillafix-1.0.10-1.20.1.jar",
+        "surge-1.20.1-2.0.85.jar",
+        "texfix-1.20.1-1.0.0.jar",
+        "lazydfu-1.20.1-1.0.0.jar"
+      ]
+    },
+    {
+      "id": "fps_optimization",
+      "label": "FPS 优化（过时）",
+      "note": "BetterFPS 和 Performant 是老牌优化模组，其功能已被 ModernFix + Embeddium 覆盖。",
+      "current": "ModernFix + Embeddium",
+      "aliases": ["BetterFPS", "Performant"],
+      "conflicts_with": ["ModernFix", "Embeddium"],
+      "recommendation": "删掉 BetterFPS 和 Performant，换上 ModernFix + Embeddium",
+      "examples": [
+        "betterfps-1.20.1-3.5.0.jar",
+        "performant-1.20.1-1.0.0.jar"
+      ]
+    },
+    {
+      "id": "light_optimization",
+      "label": "光照优化",
+      "note": "以下模组都是优化光照计算的，功能重复。",
+      "current": "Alternate Current",
+      "aliases": ["Phosphor"],
+      "conflicts_with": ["Starlight"],
+      "recommendation": "只保留 Alternate Current，不要和 Starlight 同时装",
+      "examples": [
+        "alternate-current-mc1.20.1-1.7.0.jar",
+        "phosphor-forge-1.20.1-1.0.0.jar",
+        "starlight-1.20.1-1.1.3.jar"
+      ]
+    },
+    {
+      "id": "recipe_viewer",
+      "label": "物品合成表查询",
+      "note": "以下模组功能完全一样，都是用来查合成表的。只留一个就行！",
+      "current": "JEI（最主流）/ REI / EMI",
+      "aliases": [],
+      "conflicts_with": ["JEI ↔ REI ↔ EMI 互斥"],
+      "recommendation": "只装一个！推荐 JEI（兼容性最好）或 EMI（现代风格）",
+      "examples": [
+        "jei-1.20.1-forge-15.3.0.4.jar",
+        "roughlyenoughitems-1.20.1-12.0.725.jar",
+        "emi-1.1.17+1.20.1.jar"
+      ]
+    },
+    {
+      "id": "block_info_hud",
+      "label": "方块/实体信息显示",
+      "note": "以下模组都是用来显示你看着的方块/实体信息的，功能重叠。",
+      "current": "Jade",
+      "aliases": ["WTHIT", "HWYLA"],
+      "conflicts_with": ["The One Probe"],
+      "recommendation": "只装一个，推荐 Jade（最活跃）",
+      "examples": [
+        "Jade-1.20.1-forge-11.11.1.jar",
+        "WTHIT-forge-1.20.1-8.2.0.jar",
+        "HWYLA-1.20.1-2.0.0.jar",
+        "theoneprobe-1.20.1-10.0.0.jar"
+      ]
+    },
+    {
+      "id": "minimap",
+      "label": "小地图",
+      "note": "小地图模组之间互不兼容，只装一个。",
+      "current": "Xaero's Minimap + Xaero's World Map",
+      "aliases": [],
+      "conflicts_with": ["JourneyMap 与 Xaero 互斥"],
+      "recommendation": "推荐 Xaero's Minimap（轻量流畅）或 JourneyMap（功能全面），二选一",
+      "examples": [
+        "Xaeros_Minimap_24.6.1_Forge_1.20.1.jar",
+        "journeymap-1.20.1-5.10.0-forge.jar"
+      ]
+    },
+    {
+      "id": "essential_api",
+      "label": "基础前置 API",
+      "note": "这些是模组运行所需的基础 API，容易因版本混放导致重复。",
+      "current": "Fabric API / Forge API",
+      "aliases": [],
+      "conflicts_with": [],
+      "recommendation": "检查 mods 文件夹，确保每个 API 只有一份。Fabric API 和 Forge API 不要混用",
+      "examples": [
+        "fabric-api-0.92.0+1.20.1.jar",
+        "fabric-api-base-0.4.42+1.20.1.jar"
+      ]
+    },
+    {
+      "id": "kotlin_language",
+      "label": "Kotlin 语言支持",
+      "note": "部分模组需要 Kotlin 运行环境才能使用。",
+      "current": "Fabric Language Kotlin（Fabric）/ Kotlin for Forge（Forge）",
+      "aliases": [],
+      "conflicts_with": [],
+      "recommendation": "检查是否有多份不同版本的 Kotlin 支持模组，只保留最新版",
+      "examples": [
+        "fabric-language-kotlin-1.12.0+kotlin.2.0.0.jar",
+        "kotlinforforge-4.11.0-all.jar"
+      ]
+    },
+    {
+      "id": "create_addons",
+      "label": "Create（机械动力）附属",
+      "note": "Create 的附属模组版本必须和 Create 本体版本匹配。",
+      "current": "Create",
+      "aliases": [],
+      "conflicts_with": ["不同版本的 Create 附属混用"],
+      "recommendation": "检查 mods 文件夹中是否有多份 Create jar（如 0.5.1 和 0.5.2 各一个）。附属模组的版本必须与本体对应",
+      "examples": [
+        "create-1.20.1-0.5.1.jar",
+        "create-1.20.1-0.5.1-f.jar"
+      ]
+    },
+    {
+      "id": "carpet_addons",
+      "label": "Carpet 附属",
+      "note": "Carpet 的附属模组版本必须匹配。",
+      "current": "Carpet",
+      "aliases": [],
+      "conflicts_with": [],
+      "recommendation": "确保 Carpet、Carpet Extra、Carpet TIS Addition 版本兼容",
+      "examples": [
+        "carpet-1.20.1-1.4.112.jar",
+        "carpet-extra-1.20.1-1.4.112.jar"
+      ]
+    },
+    {
+      "id": "server_optimization",
+      "label": "服务端优化（Forge）",
+      "note": "以下模组都是服务端性能优化模组。Lithium 是 Fabric 版，Radium 是它的 Forge 移植版，Canary 又是 Radium 的分支。本质上是同一个东西的不同分支。",
+      "current": "Canary / Radium",
+      "aliases": ["Lithium"],
+      "conflicts_with": ["不要同时装 Canary 和 Radium"],
+      "recommendation": "Forge 用 Radium 或 Canary，Fabric 用 Lithium。不要混装",
+      "examples": [
+        "canary-mc1.20.1-0.3.2.jar",
+        "radium-mc1.20.1-0.7.1.jar",
+        "lithium-fabric-mc1.20.1-0.12.1.jar"
+      ]
+    },
+    {
+      "id": "entity_culling",
+      "label": "实体渲染优化",
+      "note": "以下模组用于优化实体渲染，不显示被遮挡的实体以提高帧数。功能重复。",
+      "current": "EntityCulling",
+      "aliases": [],
+      "conflicts_with": ["More Culling"],
+      "recommendation": "只装 EntityCulling 或 More Culling 中的一个，不要同时装",
+      "examples": [
+        "entityculling-forge-1.20.1-1.6.6.jar",
+        "moreculling-1.20.1-1.0.0.jar"
+      ]
+    },
+    {
+      "id": "block_entity_optimization",
+      "label": "方块实体优化",
+      "note": "以下模组用于优化方块实体（箱子、熔炉、漏斗等）的渲染性能。",
+      "current": "Enhanced Block Entities",
+      "aliases": [],
+      "conflicts_with": ["Better Beds", "ModernFix（部分功能覆盖）"],
+      "recommendation": "如果你用了 ModernFix，检查是否已内置方块实体优化。如果单独装 Enhanced Block Entities，勿和 Better Beds 同时装",
+      "examples": [
+        "enhancedblockentities-1.20.1-0.9.1.jar",
+        "betterbeds-1.20.1-1.4.0.jar"
+      ]
+    },
+    {
+      "id": "inventory_management",
+      "label": "背包整理",
+      "note": "以下模组都是用来整理背包/箱子物品的，功能重叠。",
+      "current": "Inventory Profiles Next",
+      "aliases": [],
+      "conflicts_with": ["Mouse Tweaks", "Tweakeroo（整理功能部分）"],
+      "recommendation": "推荐 Inventory Profiles Next（功能最全）。如果装了 Mouse Tweaks，关掉其中一方的整理功能避免冲突",
+      "examples": [
+        "inventoryprofilesnext-forge-1.20.1-1.13.1.jar",
+        "MouseTweaks-forge-1.20.1-2.25.1.jar"
+      ]
+    },
+    {
+      "id": "sound_mods",
+      "label": "音效优化",
+      "note": "以下模组都是修改/优化游戏音效的，容易互相冲突。",
+      "current": "Sound Physics Remastered",
+      "aliases": [],
+      "conflicts_with": ["Presence Footsteps", "Dynamic Surroundings", "Sound Filters"],
+      "recommendation": "只装一个音效模组。推荐 Sound Physics Remastered（最真实）或 Presence Footsteps（脚步声增强，较轻度）",
+      "examples": [
+        "sound-physics-remastered-forge-1.20.1-1.4.5.jar",
+        "presencefootsteps-1.20.1-1.9.4.jar",
+        "dynamicsurroundings-1.20.1-1.0.0.jar"
+      ]
+    },
+    {
+      "id": "accessory_slots",
+      "label": "饰品栏/戒指栏",
+      "note": "以下模组用于添加额外的饰品/装备栏位，功能类似。",
+      "current": "Curios API",
+      "aliases": [],
+      "conflicts_with": ["Trinkets（Fabric）"],
+      "recommendation": "Forge 用 Curios API，Fabric 用 Trinkets。不要混用",
+      "examples": [
+        "curios-forge-1.20.1-5.5.0.jar",
+        "trinkets-1.20.1-3.7.2.jar"
+      ]
+    },
+    {
+      "id": "library_mods",
+      "label": "公共库模组",
+      "note": "以下模组是多个其他模组依赖的公共库，容易因整合包制作者或用户重复放置多个版本而出问题。",
+      "current": "Architectury API / Cloth Config API / Bookshelf / Patchouli",
+      "aliases": [],
+      "conflicts_with": [],
+      "recommendation": "检查 mods 文件夹，确保每个库模组只有一份最新版。如果多个模组依赖不同版本，通常取最新版即可",
+      "examples": [
+        "architectury-1.20.1-forge-9.2.14.jar",
+        "cloth-config-1.20.1-forge-11.1.136.jar",
+        "bookshelf-1.20.1-20.2.13.jar",
+        "Patchouli-1.20.1-84.1.jar"
+      ]
+    },
+    {
+      "id": "mod_menu",
+      "label": "模组列表界面",
+      "note": "以下模组用于在游戏中查看已安装的模组列表。",
+      "current": "Mod Menu（Fabric）/ Catalogue（Forge）",
+      "aliases": [],
+      "conflicts_with": [],
+      "recommendation": "Fabric 用 Mod Menu，Forge 用 Catalogue（或直接用 Forge 自带的模组列表）。如果同时装 Mod Menu 和 Catalogue，只有对应加载器那个会生效",
+      "examples": [
+        "modmenu-1.20.1-8.0.0.jar",
+        "catalogue-1.20.1-1.8.0.jar"
+      ]
+    },
+    {
+      "id": "render_distance",
+      "label": "视距扩展",
+      "note": "以下模组用于突破原版视距限制，看到更远的距离。功能重复。",
+      "current": "Bobby（Fabric）/ Farsight（Forge）",
+      "aliases": [],
+      "conflicts_with": ["Sodium / Embeddium（可能冲突）"],
+      "recommendation": "Fabric 用 Bobby，Forge 用 Farsight。注意和 Embeddium/Sodium 可能有兼容问题，建议先试能不能一起用",
+      "examples": [
+        "bobby-1.20.1-1.1.1.jar",
+        "farsight-1.20.1-1.2.0.jar"
+      ]
+    },
+    {
+      "id": "food_hud",
+      "label": "食物/饱食度信息显示",
+      "note": "以下模组用于显示食物能恢复多少饱食度和饱和度，功能重叠。",
+      "current": "AppleSkin",
+      "aliases": [],
+      "conflicts_with": [],
+      "recommendation": "装 AppleSkin 即可。如果有其他模组也显示食物信息（如某些整合包自带的 HUD 模组），关掉重复的部分",
+      "examples": [
+        "appleskin-forge-mc1.20.1-2.5.1.jar"
+      ]
+    },
+    {
+      "id": "network_optimization",
+      "label": "网络优化/修复",
+      "note": "以下模组用于修复网络连接问题或优化网络性能。",
+      "current": "Connectivity（Forge）",
+      "aliases": [],
+      "conflicts_with": [],
+      "recommendation": "只装一个网络修复模组。Connectivity 适用于 Forge，Krypton 适用于 Fabric。两者不要互换使用",
+      "examples": [
+        "connectivity-1.20.1-1.9.1.jar",
+        "krypton-1.20.1-0.2.8.jar"
+      ]
+    },
+    {
+      "id": "fast_workbench_furnace",
+      "label": "工作台/熔炉加速（已过时）",
+      "note": "FastWorkbench 和 FastFurnace 的功能已被 ModernFix 内置覆盖。不需要再单独安装。",
+      "current": "ModernFix",
+      "aliases": ["FastWorkbench", "FastFurnace"],
+      "conflicts_with": ["ModernFix"],
+      "recommendation": "删掉 FastWorkbench 和 FastFurnace，ModernFix 已包含这些优化",
+      "examples": [
+        "fastworkbench-1.20.1-8.1.2.jar",
+        "fastfurnace-1.20.1-8.0.0.jar"
+      ]
+    }
+  ]
+}

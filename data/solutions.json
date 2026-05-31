@@ -99,6 +99,111 @@
     },
     "Skipping event": {
       "solution": "游戏跳过了某个事件。\n\n可以忽略这个警告，不影响游戏。但如果后面跟着错误，就跟那个错误有关。"
+    },
+    "Duplicate mod": {
+      "solution": "装了重复的模组！同一个模组在 mods 文件夹里出现了多次。\n\n【清理步骤】\n1. 打开 .minecraft/mods 文件夹\n   - PCL 启动器：点「设置」→「模组文件夹」\n   - HMCL 启动器：点「版本列表」→ 对应版本后的「模组管理」→「打开模组文件夹」\n   - 手动：按 Win+R，输入 %appdata%/.minecraft/mods\n2. 在文件夹里搜索模组名字（或按修改时间排序），看看是不是有多个 jar 文件\n3. 只保留最新版的那个，把旧的删掉\n4. 检查 .minecraft/version/你玩的版本/mods 文件夹，有时这里也会多出一份\n5. 如果是整合包，检查 mods/1.20.1 和 mods 根目录有没有重复\n\n删完重启游戏就好了。"
+    },
+    "Duplicate entry": {
+      "solution": "模组注册时出现了重复条目，同一个 ID 被两个模组同时占用了。\n\n常见原因：\n1. 你装了同一个模组的两个不同版本 → 删掉旧版本\n2. 两个不同的模组用了同一个模组 ID → 保留你需要的那个，删除另一个\n3. 资源包或数据包冲突 → 看看是哪个模组引起的\n\n【清理步骤】\n1. 打开 .minecraft/mods 文件夹（PCL 里点「模组文件夹」）\n2. 搜索报错中提到的模组名字，把重复的删掉\n3. 如果不知道是哪个模组 → 把所有模组移出来（不要删），一个一个放回去试\n4. 每次放一批就启动一次游戏，直到找到出问题的那一个"
+    },
+    "Mod resolution conflict": {
+      "solution": "模组解析冲突了，多个模组要同一个东西但版本不一样。\n\n大概率是：\n1. 装了同一个前置模组的两个不同版本 → 删掉旧版本\n2. 两个模组依赖了同一个库的不同版本 → 装一个能同时兼容它们的版本\n3. 整合包本来就有问题 → 去整合包发布页看看有没有更新\n\n【清理步骤】\n1. PCL 启动器会在启动时提示哪些模组冲突了，照着提示删掉冲突的文件\n2. 打开 .minecraft/mods 文件夹，找到冲突的模组，只保留最新版\n3. 还是不行就搜一下该模组的 MC百科页面，看看需要什么版本的依赖\n4. 删完重启游戏"
+    },
+    "Conflicting mod": {
+      "solution": "模组冲突了，两个模组打架了。\n\n日志里通常会说是哪两个模组冲突了。\n就像两个人要坐同一个座位，得有一个让开。\n\n【清理步骤】\n1. 看看报错里提到了哪几个模组名字\n2. 打开 .minecraft/mods 文件夹\n3. 找到那两个冲突的模组 jar 文件\n4. 如果功能重复 → 删掉一个，保留你想要的那个\n5. 如果一个是另一个的前置 → 两个都更新到兼容的版本\n6. 如果不知道留哪个 → 先删掉最近装的那个\n\n常见情况：OptiFine 经常跟其他模组打架，关掉 OptiFine 试试。"
+    },
+    "ModernFix": {
+      "solution": "ModernFix 是一个优化模组，经常出现重复安装的情况。\n\n可能的原因：\n1. 整合包自带了 ModernFix，你又手动装了一个 → 删掉一个\n2. 更新 ModernFix 时旧的没删干净 → 去 mods 文件夹搜一下，保留最新版\n3. 和其他优化模组（如 Embeddium、FerriteCore）打架了 → 都更新到最新版"
+    },
+    "FerriteCore": {
+      "solution": "FerriteCore 是内存优化模组，经常被重复安装。\n\n检查一下 mods 文件夹里是不是有多个 FerriteCore 的 jar 文件。\n它和 ModernFix、Sodium 等优化模组一般可以共存，但要确保版本都兼容。"
+    },
+    "Embeddium": {
+      "solution": "Embeddium（钠的分支）是渲染优化模组。\n\n常见问题：\n1. 和 OptiFine 冲突 → 删掉其中一个\n2. 和 Oculus（光影前置）版本不匹配 → 一起更新到最新版\n3. 和 ModernFix 冲突 → 更新所有优化模组\n\n建议方案：用 Embeddium + Oculus + ModernFix + FerriteCore 的组合比较稳定。"
+    },
+    "rubidium": {
+      "solution": "Rubidium（铷）是 Sodium（钠）的 Forge 移植版，现在已经改名为 Embeddium。\n\n如果你同时装了 Rubidium 和 Embeddium：\n- 它们实际上是同一个模组的不同版本名称！\n- 删掉 Rubidium，保留 Embeddium（新版）\n- 如果装了 Oculus，也一起更新到最新版\n\n总结：Rubidium → Embeddium（改名了），只留一个就行。"
+    },
+    "Sodium": {
+      "solution": "Sodium（钠）是渲染优化模组，是 Embeddium / Rubidium 的原版。\n\n如果报错提到 Sodium，最常见的是：\n1. Sodium 和 OptiFine 不兼容，要二选一\n2. Sodium 需要前置模组（如 Fabric API）\n3. 你同时装了 Sodium 和 Embeddium（或 Rubidium）→ 这是同一个东西的不同名称/分支，只留一个！\n4. 如果你是 Forge 版，应该用 Embeddium 而不是 Sodium"
+    },
+    "Embeddium": {
+      "solution": "Embeddium（钠的分支/新版本，原名 Rubidium/铷）是渲染优化模组。\n\n常见重复情况：\n1. 同时装了 Embeddium 和 Rubidium → 它们是一个东西，删掉 Rubidium\n2. 同时装了 Embeddium 和 Sodium → 同一个东西的不同分支，只留一个\n3. 和 OptiFine 冲突 → 删掉其中一个\n4. 和 Oculus（光影前置）版本不匹配 → 一起更新到最新版\n\n建议方案：Embeddium + Oculus + ModernFix + FerriteCore 的组合比较稳定。"
+    },
+    "Oculus": {
+      "solution": "Oculus 是 Forge 版的光影加载模组。\n\n常见冲突：\n1. Oculus 需要搭配 Embeddium（或 Rubidium）使用，不能单独装\n2. 和 OptiFine 冲突 → 有 Oculus 就不要装 OptiFine\n3. 版本要跟 Embeddium 匹配，两个一起更新\n4. 不要同时装 Oculus 和 Iris，它们功能一样但分别适用于 Forge 和 Fabric"
+    },
+    "Iris": {
+      "solution": "Iris 是 Fabric 版的光影加载模组，跟 Sodium 搭配使用。\n\n检查：\n1. 你同时装了 Iris 和 Oculus？它们是同一个功能的 Forge/Fabric 版，不能同时用\n2. Iris 需要最新版的 Sodium 和 Fabric API\n3. 如果装了 OptiFine，就别用 Iris 了"
+    },
+    "Fabric API": {
+      "solution": "Fabric API 是 Fabric 模组的基础前置库。\n\n常见问题：\n1. 重复安装 → 检查 mods 文件夹，只保留一个 Fabric API\n2. 版本不对 → 下载对应 MC 版本的最新版 Fabric API\n3. 某些模组需要特定版本的 Fabric API → 看看报错提示了什么版本"
+    },
+    "JEI": {
+      "solution": "JEI（Just Enough Items）是物品查询模组。\n\n重复/冲突场景：\n1. 同时装了 JEI、REI、EMI → 它们功能一样，只留一个就行\n2. JEI 和它的附属模组版本不匹配 → 都更新到最新版\n3. 有些整合包自带 JEI，你又装了一个，导致重复 → 检查 mods 文件夹"
+    },
+    "REI": {
+      "solution": "REI（Roughly Enough Items）是物品查询模组，JEI 的替代品。\n\n如果报错提到 REI：\n1. 不要和 JEI、EMI 一起装，它们功能重复\n2. 需要装 Roughly Enough Resources 或类似的附属模组的话，确保版本匹配\n3. 更新 REI 时老的 jar 没删干净 → 去 mods 文件夹清理一下"
+    },
+    "EMI": {
+      "solution": "EMI（Essential Mod Interface）是另一款物品查询模组。\n\n和 JEI、REI 功能重复，不要三个一起装。\n如果报错提到 EMI，检查 mods 文件夹里是不是同时有 JEI 或 REI，只留一个。"
+    },
+    "Jade": {
+      "solution": "Jade 是信息显示模组（看方块信息、实体信息等）。\n\n常见重复/冲突：\n1. 和 WTHIT、HWYLA 功能重复 → 只装一个\n2. Jade 的附属模组（Jade Addons）版本不对应 → 更新 Jade 本体和附属\n3. 你同时装了 Jade 和 The One Probe → 它们做类似的事，删掉一个"
+    },
+    "Create": {
+      "solution": "Create（机械动力）是一个大型模组，经常因版本问题出错。\n\n重复/冲突排查：\n1. 检查 mods 文件夹是否有多份 Create jar（比如 0.5.1 和 0.5.2 各一个）\n2. Create 的附属模组（Create Crafts & Additions、Create Encased 等）必须和本体版本匹配\n3. Create 和某些优化模组（如 OptiFine）可能不兼容\n4. 如果同时装了 Flywheel，确保版本和 Create 匹配"
+    },
+    "Lithium": {
+      "solution": "Lithium（锂）是服务端优化模组。\n\n常见问题：\n1. 和 ModernFix、FerriteCore 等优化模组冲突 → 都更新到最新版\n2. 某些模组与 Lithium 不兼容 → 禁用 Lithium 试试\n3. 如果装了 Carpet，确保和 Lithium 的版本兼容"
+    },
+    "Kotlin for Forge": {
+      "solution": "Kotlin for Forge 是让 Forge 支持 Kotlin 编程语言的前置模组。\n\n检查：\n1. mods 文件夹里是否有多个版本（旧版没删干净）\n2. 和 Fabric Language Kotlin 不是同一个东西，别搞混\n3. 有些模组需要特定版本，看看报错提示了什么版本号"
+    },
+    "Fabric Language Kotlin": {
+      "solution": "Fabric Language Kotlin 是让 Fabric 支持 Kotlin 编程语言的前置模组。\n\n常见问题：\n1. mods 文件夹里可能有多个版本重复 → 只保留最新版\n2. 和 Kotlin for Forge 是两回事，但不要同时用在同一个模组加载器上\n3. 更新相关模组时需要同时更新这个前置"
+    },
+    "Carpet": {
+      "solution": "Carpet 是技术向/生电模组。\n\n常见问题：\n1. 和 Carpet Extra、Carpet TIS Addition 等附属版本不匹配 → 一起更新\n2. 不小心装了多份 Carpet → 检查 mods 文件夹\n3. 跟 Lithium 或其他优化模组可能有兼容问题 → 更新到最新版"
+    },
+    "Magnesium": {
+      "solution": "Magnesium（镁）是 Sodium（钠）的一个非常古老的 Forge 移植版，早已被淘汰。\n\n如果你还在用 Magnesium：\n1. 立刻删掉！换成 Embeddium（最新版）\n2. Magnesium 对应的光影模组叫 Sulfuric，也同样被淘汰了\n3. 保留 Magnesium 会导致和各种新模组冲突\n\n一句话：删 Magnesium，装 Embeddium。"
+    },
+    "Sulfuric": {
+      "solution": "Sulfuric 是 Magnesium 配套的光影加载模组，早已被淘汰。\n\n如果你还在用 Sulfuric：\n1. 换成 Oculus（最新版光影加载模组）\n2. Magnesium 也要一起换掉，用 Embeddium\n3. 旧的光影包可能也需要更新"
+    },
+    "Hydrogen": {
+      "solution": "Hydrogen（氢）是 FerriteCore 的前身，一个内存优化模组。\n\n如果报错提到 Hydrogen：\n1. 它已经被 FerriteCore 取代了，删掉 Hydrogen\n2. 装上 FerriteCore（新版）\n3. 不要同时装 Hydrogen 和 FerriteCore，它们是同一个东西的不同版本"
+    },
+    "Phosphor": {
+      "solution": "Phosphor（磷）是光照优化模组。\n\n注意：\n1. Phosphor 已经被 Alternate Current 取代，建议换用\n2. 如果装了 Phosphor，不要同时装 Starlight（另一个光照优化模组），功能冲突\n3. 1.20 以上的 MC 版本已经不需要 Phosphor 了"
+    },
+    "Starlight": {
+      "solution": "Starlight（星光）是光照优化模组，和 Phosphor 功能重复。\n\n不要同时装 Starlight 和 Phosphor，只留一个。\n1.17+ 的 MC 版本推荐用 Starlight。\n如果装了优化模组包（比如 Fabulously Optimized），可能自带了，不需要再手动装。"
+    },
+    "BetterFPS": {
+      "solution": "BetterFPS 是老牌的 FPS 优化模组。\n\n注意：\n1. 和 ModernFix、Sodium 等现代优化模组可能不兼容\n2. 很多 BetterFPS 的优化算法已经被新版 MC 内置了\n3. 建议删掉 BetterFPS，换成 ModernFix + Embeddium 的组合\n\n一句话：BetterFPS 已经过时了，用新的优化模组效果更好。"
+    },
+    "Performant": {
+      "solution": "Performant 是一个老牌的优化模组。\n\n注意：\n1. Performant 和很多新模组不兼容，容易导致崩溃\n2. 建议删掉 Performant，换成 ModernFix + FerriteCore + Lithium\n3. Performant 的很多优化功能已经被新版 MC 或更好的模组取代"
+    },
+    "VanillaFix": {
+      "solution": "VanillaFix 是老版的崩溃修复模组。\n\n注意：\n1. 已经被 ModernFix 完全取代了，删掉 VanillaFix\n2. 装上 ModernFix（新版），功能更多也更稳定\n3. 同时装 VanillaFix 和 ModernFix 会导致冲突"
+    },
+    "FoamFix": {
+      "solution": "FoamFix 是老版的内存优化模组。\n\n注意：\n1. 已经被 FerriteCore 取代，建议换用\n2. 1.16+ 的 MC 版本不需要 FoamFix 了\n3. 如果一定要用老版本 MC，FoamFix 可以留着，但别和 FerriteCore 一起装"
+    },
+    "Surge": {
+      "solution": "Surge 是老版的加载优化模组。\n\n已经被 ModernFix 取代了，建议删掉 Surge 换上 ModernFix。"
+    },
+    "TexFix": {
+      "solution": "TexFix 是纹理优化模组。\n\n大部分功能已被 ModernFix 覆盖，建议删掉。\n如果一定要用，确保和 ModernFix 版本兼容。"
+    },
+    "LazyDFU": {
+      "solution": "LazyDFU 是加快游戏启动的优化模组。\n\n它的功能已经被 ModernFix 内置了。\n如果同时装了 LazyDFU 和 ModernFix，删掉 LazyDFU 即可。"
+    },
+    "RandomPatches": {
+      "solution": "RandomPatches 是一个综合修复模组。\n\n它的很多修复功能已经被 ModernFix 覆盖。\n如果同时装了 RandomPatches 和 ModernFix，确保版本兼容，否则删掉 RandomPatches。"
     }
   },
   "Java/环境": {

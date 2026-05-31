@@ -1,9 +1,9 @@
 name: astrbot_plugin_mc_helper
 display_name: MC 错误报告分析
-author: AstrBot User
-version: "1.0.0"
+author: jinyiwei2012
+version: "1.1.0"
 description: >
   自动检测并分析用户上传的 Minecraft 错误报告压缩包（格式：错误报告-2026-日期.zip）。
-  下载、解压后读取错误日志，先在本地知识库中匹配已知解决方案；
-  若无匹配，则使用 AI 分析错误日志并提供解决方案。
+  下载、解压后读取错误日志，优先使用 AI 进行分析，辅以本地知识库兜底。
+  支持重复模组检测、日志位置定位、智能纠错建议。
 short_desc: Minecraft 错误报告自动分析与 AI 诊断
