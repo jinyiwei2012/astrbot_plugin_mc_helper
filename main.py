@@ -679,26 +679,22 @@ class McHelperPlugin(Star):
 
         result = solution + "\n\n---"
 
+        tips = []
+
         if details:
-            result += "\n\n**📋 错误详情**"
             for d in details:
-                result += "\n- " + d
-
-            tips = []
-
-        for d in details:
-            if d.startswith("涉及文件") or d.startswith("涉及模组"):
-                files = d.split("：")[1] if "：" in d else ""
-                tip_parts = []
-                for f in files.replace("、", " ").split():
-                    if ".jar" in f.lower():
-                        tip_parts.append(f)
-                if tip_parts:
-                    tips.append(
-                        "打开 .minecraft/mods 文件夹，找到上面对应的文件，"
-                        + "、".join(tip_parts[:3])
-                        + "。检查是否需要删除旧版或解决冲突。"
-                    )
+                if d.startswith("涉及文件") or d.startswith("涉及模组"):
+                    files = d.split("：")[1] if "：" in d else ""
+                    tip_parts = []
+                    for f in files.replace("、", " ").split():
+                        if ".jar" in f.lower():
+                            tip_parts.append(f)
+                    if tip_parts:
+                        tips.append(
+                            "打开 .minecraft/mods 文件夹，找到上面对应的文件，"
+                            + "、".join(tip_parts[:3])
+                            + "。检查是否需要删除旧版或解决冲突。"
+                        )
 
             if d.startswith("坐标"):
                 coord = d.split("：")[1] if "：" in d else ""
