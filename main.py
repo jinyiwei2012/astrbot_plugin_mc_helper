@@ -101,6 +101,8 @@ class McHelperPlugin(Star):
 
         self.solutions_db = self._load_solutions_db()
         self.duplicate_mods_data = self._load_duplicate_mods()
+        self.blacklist_path = self.plugin_data_path / "user_blacklist.json"
+        self.user_blacklist: dict[str, dict] = self._load_blacklist()
         self._recent_files: dict[str, File] = {}
         logger.info(
             f"MC Helper 插件已加载，本地方案库共 {self._count_solutions()} 条，配置项 {len(config) if config else 0} 个"
@@ -136,6 +138,41 @@ class McHelperPlugin(Star):
         except Exception as e:
             logger.error(f"加载重复模组对照表失败: {e}")
         return {"mod_groups": []}
+
+    def _load_blacklist(self) -> dict:
+        try:
+            if self.blacklist_path.exists():
+                with open(self.blacklist_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.error(f"加载用户黑名单失败: {e}")
+        return {}
+
+    def _save_blacklist(self):
+        try:
+            with open(self.blacklist_path, "w", encoding="utf-8") as f:
+                json.dump(self.user_blacklist, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"保存用户黑名单失败: {e}")
+
+    def _get_user_id(self, event: AstrMessageEvent) -> str:
+        return event.unified_msg_origin
+
+    def _is_user_blacklisted(self, event: AstrMessageEvent) -> bool:
+        uid = self._get_user_id(event)
+        entry = self.user_blacklist.get(uid)
+        return entry is not None and entry.get("blacklisted", False)
+
+    def _record_malicious_upload(self, event: AstrMessageEvent):
+        uid = self._get_user_id(event)
+        entry = self.user_blacklist.get(uid, {"count": 0, "blacklisted": False})
+        entry["count"] = entry.get("count", 0) + 1
+        max_allowed = self._cfg("max_malicious_uploads", 3)
+        if entry["count"] >= max_allowed:
+            entry["blacklisted"] = True
+            logger.warning(f"用户 {uid} 已因多次上传恶意文件被自动拉黑")
+        self.user_blacklist[uid] = entry
+        self._save_blacklist()
 
     def _check_duplicate_mods(self, error_text: str) -> str | None:
         found_jars = _RE_JAR_NAME.findall(error_text)
@@ -242,6 +279,8 @@ class McHelperPlugin(Star):
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
         if not self._is_allowed_group(event):
+            return
+        if self._is_user_blacklisted(event):
             return
         message_obj = event.message_obj
         if not message_obj:
@@ -385,6 +424,9 @@ class McHelperPlugin(Star):
         yield event.plain_result(f"已添加解决方案：{error_keyword}")
 
     async def _handle_error_report(self, event: AstrMessageEvent, file_comp: File):
+        if self._is_user_blacklisted(event):
+            yield event.plain_result("你已被限制使用此功能。")
+            return
         yield event.plain_result("正在下载并分析错误报告...")
 
         file_url = getattr(file_comp, "url", None) or getattr(file_comp, "file", None)
@@ -467,6 +509,7 @@ class McHelperPlugin(Star):
                                 blacklist_names.append(fn)
                     if blacklist_names:
                         logger.warning(f"压缩包包含黑名单文件: {blacklist_names}")
+                        self._record_malicious_upload(event)
                         yield event.plain_result("压缩包包含不允许的文件类型，已拒绝处理。")
                         shutil.rmtree(extract_dir, ignore_errors=True)
                         return
