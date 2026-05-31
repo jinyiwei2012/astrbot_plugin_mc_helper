@@ -14,9 +14,11 @@
 - **文件类型白名单**：只提取 `.log` / `.txt` / 安全 `.json`，其余文件静默跳过
 - **黑名单拦截**：`.exe` `.dll` `.sh` `.vbs` `.js` 等可执行文件直接拒绝整个压缩包
 - **Zip Bomb 防护**：文件数 ≤ 1000、单文件 ≤ 10MB、总量 ≤ 50MB
+- **下载大小限制**：`download_zip` 增加 200MB 上限，防磁盘 DoS
 - **路径穿越防护**：文件名 `/../` + `resolve()` 双重校验
-- **JSON 内容扫描**：解压前扫描 11 种危险命令关键词
+- **JSON 内容扫描**：解压前扫描 11 种危险命令关键词；超大 JSON 分段读取防 OOM
 - **用户黑名单**：多次上传恶意文件自动拉黑（可配置阈值，默认 3 次）
+- **SSRF 防护**：DNS 预解析 + Private IP 拦截 + DNS Pinning（`_PinnedResolver`）
 - **流式下载**：改用 `iter_chunked(65536)` 替代 `resp.read()`，防 OOM
 
 ### 🛠 重构与优化
@@ -27,6 +29,17 @@
 - **统一消息格式**：所有分析结果使用 `**🤖 AI 分析结果**` Markdown 格式 + 截图发送
 - **CSS 纯文本模板**：替换 f-string `{{}}` 转义，消除静态分析误报
 - **`_recent_files` LRU 淘汰**：上限 200 条，保留最近 100 条
+- **`_load_json` 提取**：`load_db` / `load_duplicate_mods` 共用 `_load_json` 消除重复
+- **`enrich_solution` 重构**：拆分为 10 个职责单一的辅助函数 + `_TIP_RULES` 配置表
+
+### 🔧 Bug 修复
+- **JAR 正则**：`\d` 改为可选 `(?:\d[\w.+]*)?`，`MyMod.jar` 等纯字母 mod 文件可被匹配
+- **Mod ID 正则**：`[a-z_]+` → `[a-z0-9_]+`，支持含数字的 Mod ID（如 `3dskinlayers`）
+- **堆栈正则**：`[\w.]+` → `[\w.$]+`，支持内部类堆栈（`Outer$Inner`）
+- **SKIP_MOD_ID**：移除 `com`/`org`/`net` 等 Java 包名前缀，消除极低概率的误过滤
+- **重复模组检测**：`found_by_name` 结果去重，避免列表中出现重复名称
+- **双分隔符**：`enrich_solution` 合并两个连续 `---` 为单个
+- **用户配置写盘**：`set_user_cfg` 改为延迟写（`_config_dirty`），`terminate` 时落盘
 
 ### 📦 依赖变更
 - 新增 `markdown>=3.0.0`（用于 Markdown → HTML 渲染）

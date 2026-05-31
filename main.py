@@ -51,10 +51,9 @@ class McHelperPlugin(Star):
 
     def _is_allowed(self, event: AstrMessageEvent) -> bool:
         wl = self._cfg("whitelist_groups", [])
-        if not wl:
+        if not wl or not isinstance(wl, (list, tuple, set)):
             return True
-        wl_set = wl if isinstance(wl, set) else set(wl)
-        return event.get_group_id() in wl_set
+        return event.get_group_id() in wl
 
     def get_solution(self, key: str):
         return get_solution(self.solutions, key)
@@ -103,7 +102,7 @@ class McHelperPlugin(Star):
         if uid not in self.user_configs:
             self.user_configs[uid] = {}
         self.user_configs[uid][key] = value
-        self._save_user_configs()
+        self._config_dirty = True
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
@@ -136,4 +135,6 @@ class McHelperPlugin(Star):
             yield r
 
     async def terminate(self):
+        if self._config_dirty:
+            self._save_user_configs()
         logger.info("MC Helper 已卸载")

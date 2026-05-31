@@ -33,8 +33,6 @@ class Handlers:
     def _ai_failed(self, result: str) -> bool:
         return not result or result.strip() == "" or result.startswith(FAIL_PREFIXES)
 
-    _enrich_cache: tuple[str, str, str] | tuple = ()
-
     def _enrich(self, text: str, source: str) -> str:
         details = extract_report_details(source)
         dup = check_duplicate_mods(self.p.dup_data, source)
@@ -414,7 +412,7 @@ class Handlers:
                         if st.st_mtime < cutoff:
                             shutil.rmtree(d, ignore_errors=True)
                             logger.info(f"清理过期报告: {d.name}")
-                    except OSError:
+                    except Exception:
                         pass
         except Exception as e:
             logger.debug(f"清理旧报告失败: {e}")

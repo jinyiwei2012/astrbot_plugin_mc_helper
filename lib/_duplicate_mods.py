@@ -7,17 +7,18 @@ def check_duplicate_mods(duplicate_mods_data: dict, error_text: str) -> str | No
     found_jars: list[str] = []
     found_paths: list[str] = []
 
-    for m in re.finditer(r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", error_text, re.IGNORECASE):
+    JAR_RE = r"[\w\-+]+(?:mc[\w\-+.]+)?(?:\d[\w.+]*)?\.jar"
+    for m in re.finditer(JAR_RE, error_text, re.IGNORECASE):
         found_jars.append(m.group(0))
-    for m in re.finditer(r"(?:^|[\s\\/])mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)", error_text, re.IGNORECASE):
+    for m in re.finditer(r"(?:^|[\s\\/])mods[\\/]" + JAR_RE, error_text, re.IGNORECASE):
         found_paths.append(m.group(1))
 
     ds = re.search(r"Duplicate\s*Mod[s]?[:\s]*\n((?:.{0,300}\n?){0,15})", error_text, re.IGNORECASE)
     if ds and not found_paths:
         sec = ds.group(1)
-        found_paths = re.findall(r"(?:^|[\s\\/])mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)", sec, re.IGNORECASE)
+        found_paths = re.findall(r"(?:^|[\s\\/])mods[\\/]" + JAR_RE, sec, re.IGNORECASE)
         if not found_paths:
-            found_paths = re.findall(r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", sec, re.IGNORECASE)
+            found_paths = re.findall(JAR_RE, sec, re.IGNORECASE)
 
     for group in duplicate_mods_data.get("mod_groups", []):
         current = group.get("current", "")
@@ -43,7 +44,7 @@ def check_duplicate_mods(duplicate_mods_data: dict, error_text: str) -> str | No
         else:
             continue
 
-        result = f"**⚠️ 检测到同一类模组出现多个：{', '.join(found_by_name)}**\n\n"
+        result = f"**⚠️ 检测到同一类模组出现多个：{', '.join(dict.fromkeys(found_by_name))}**\n\n"
         result += f"{group.get('note', '')}\n"
         if matched:
             result += f"\n**检测到的冲突文件：**\n{fl}\n"

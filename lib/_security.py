@@ -88,6 +88,9 @@ class _PinnedResolver:
         return [{"hostname": host, "host": host, "port": port, "family": family, "proto": 6, "flags": 0}]
 
 
+_MAX_DOWNLOAD_BYTES = 200 * 1024 * 1024
+
+
 async def download_zip(file_url: str, zip_path: Path, timeout_sec: int = 120):
     safe_url, hostname, pinned_ip = await _validate_url(file_url)
     loop = asyncio.get_running_loop()
@@ -98,8 +101,12 @@ async def download_zip(file_url: str, zip_path: Path, timeout_sec: int = 120):
         async with session.get(safe_url) as resp:
             if resp.status != 200:
                 raise ConnectionError(f"HTTP {resp.status}")
+            downloaded = 0
             with open(zip_path, "wb") as f:
                 async for chunk in resp.content.iter_chunked(65536):
+                    downloaded += len(chunk)
+                    if downloaded > _MAX_DOWNLOAD_BYTES:
+                        raise ValueError("下载文件过大")
                     f.write(chunk)
 
 
@@ -143,11 +150,13 @@ def scan_zip(zip_path: Path) -> list[str]:
                 blacklisted.append(info.filename)
             elif ext == ".json":
                 try:
-                    raw = zf.read(info)
-                    if len(raw) > _JSON_SCAN_MAX_BYTES:
+                    read_size = min(info.file_size, _JSON_SCAN_MAX_BYTES)
+                    raw = zf.read(info, read_size)
+                    if info.file_size > _JSON_SCAN_MAX_BYTES:
                         head = raw[: _JSON_SCAN_MAX_BYTES // 2]
-                        tail = raw[-_JSON_SCAN_MAX_BYTES // 2 :]
-                        combined = head + b"\n" + tail
+                        tail_start = max(0, info.file_size - _JSON_SCAN_MAX_BYTES // 2)
+                        tail = zf.read(info, tail_start, info.file_size - tail_start)
+                        combined = head + b"\n" + (tail or b"")
                     else:
                         combined = raw
                     content = combined.decode("utf-8", errors="replace")

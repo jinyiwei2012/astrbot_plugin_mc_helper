@@ -7,24 +7,22 @@ from typing import Optional
 from astrbot.api import logger
 
 
-def load_db(path: Path) -> dict:
-    if path.exists():
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return dict(json.load(f))
-        except Exception as e:
-            logger.error(f"加载方案库失败: {e}")
-    return {}
-
-
-def load_duplicate_mods(path: Path) -> dict:
+def _load_json(path: Path, label: str, fallback: dict) -> dict:
     try:
         if path.exists():
             with open(path, "r", encoding="utf-8") as f:
                 return dict(json.load(f))
     except Exception as e:
-        logger.error(f"加载重复模组对照表失败: {e}")
-    return {"mod_groups": []}
+        logger.error(f"加载{label}失败: {e}")
+    return fallback
+
+
+def load_db(path: Path) -> dict:
+    return _load_json(path, "方案库", {})
+
+
+def load_duplicate_mods(path: Path) -> dict:
+    return _load_json(path, "重复模组对照表", {"mod_groups": []})
 
 
 def get_solution(db: dict, key: str) -> Optional[str]:
@@ -38,5 +36,8 @@ def get_solution(db: dict, key: str) -> Optional[str]:
 def count_solutions(db: dict) -> int:
     count = 0
     for v in db.values():
-        count += len(v) if isinstance(v, dict) else 1
+        if isinstance(v, dict):
+            count += len(v)
+        elif isinstance(v, (list, str)):
+            count += 1
     return count

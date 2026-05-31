@@ -48,8 +48,11 @@ _HTML_TMPL = """<!DOCTYPE html>
 def md_to_html(md_text: str) -> str:
     if not _HAS_MD:
         return f"<pre>{md_text}</pre>"
-    body = _md_lib.markdown(
-        md_text,
-        extensions=["extra", "codehilite", "nl2br"],
-    )
+    try:
+        body = _md_lib.markdown(
+            md_text,
+            extensions=["extra", "codehilite", "nl2br"],
+        )
+    except Exception:
+        body = f"<pre>{md_text}</pre>"
     return _HTML_TMPL.replace("__BODY__", body)

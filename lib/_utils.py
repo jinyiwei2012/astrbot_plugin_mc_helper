@@ -3,13 +3,14 @@
 import re
 
 # Jar file patterns
+_JAR_RE = r"[\w\-+]+(?:mc[\w\-+.]+)?(?:\d[\w.+]*)?\.jar"
 RE_JAR_PATH = re.compile(
-    r"(?:^|[\s\\/])mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
+    r"(?:^|[\s\\/])mods[\\/]" + _JAR_RE,
     re.IGNORECASE,
 )
-RE_JAR_NAME = re.compile(r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", re.IGNORECASE)
+RE_JAR_NAME = re.compile(_JAR_RE, re.IGNORECASE)
 RE_MOD_FILE = re.compile(
-    r"(?:Mod|Mod File|File):\s*([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
+    r"(?:Mod|Mod File|File):\s*" + _JAR_RE,
     re.IGNORECASE,
 )
 
@@ -19,7 +20,7 @@ RE_DUP_SECTION = re.compile(
     re.IGNORECASE,
 )
 RE_EXIT_CODE = re.compile(r"Exit Code[:\s]*(-?\d+)")
-RE_STACK = re.compile(r"at\s+([\w.]+)\(([^:]+:\d+)\)")
+RE_STACK = re.compile(r"at\s+([\w.$]+)\(([^:]+:\d+)\)")
 RE_COORDS = re.compile(r"(?:Tile Entity at|Block at|Position)\s*\[?(-?\d+)[,; ]\s*(-?\d+)[,; ]\s*(-?\d+)\]?")
 RE_MEMORY = re.compile(r"(\d+)\s*(MB|GB|MiB|GiB)", re.IGNORECASE)
 RE_SERVER = re.compile(
@@ -32,7 +33,7 @@ RE_PATH = re.compile(
 )
 RE_JAVA = re.compile(r"Java\s*(?:Version|VM|Runtime)[:\s]*([\d.]+)", re.IGNORECASE)
 RE_OS = re.compile(r"Operating\s+System[:\s]*([^\n]+)", re.IGNORECASE)
-RE_MOD_ID = re.compile(r"([a-z_]+:[a-z_]+)")
+RE_MOD_ID = re.compile(r"([a-z_][a-z0-9_]*:[a-z_][a-z0-9_]*)")
 RE_EXCEPTION = re.compile(r"(?:Caused by|Description)[:\s]*([^\n]+)")
 RE_ERROR_CLS = re.compile(
     r"(java\.\w+(?:\.\w+)+Error|java\.\w+(?:\.\w+)+Exception|"
@@ -54,15 +55,7 @@ SKIP_STACK = (
 SKIP_MOD_ID = {
     "minecraft",
     "java",
-    "net",
-    "com",
-    "org",
     "cpw",
-    "it",
-    "de",
-    "fr",
-    "io",
-    "pl",
 }
 
 FAIL_PREFIXES = (
@@ -88,7 +81,7 @@ BLACKLIST_EXTS = {
     ".ps1",
     ".jar",
 }
-DANGEROUS_CMDS = (
+DANGEROUS_CMDS = {
     "powershell",
     "curl",
     "wget",
@@ -100,7 +93,7 @@ DANGEROUS_CMDS = (
     "wmic",
     "cscript",
     "schtasks",
-)
+}
 
 # Limits
 MAX_ZIP_FILES = 1000

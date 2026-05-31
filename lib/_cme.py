@@ -16,7 +16,7 @@ def analyze_cme_log(log_path: Path) -> str | None:
     thread_traces = {}
 
     for line in content.split("\n"):
-        m = re.search(r"at TRANSFORMER/(\w+).*?/(\w+\.\w+)", line)
+        m = re.search(r"at TRANSFORMER/([\w$]+).*?/([\w.$]+)", line)
         if m:
             mod = m.group(1)
             cls = m.group(2)
