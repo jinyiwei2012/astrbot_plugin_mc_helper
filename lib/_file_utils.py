@@ -1,13 +1,12 @@
-"""File utilities for log collection and cleanup."""
+"""文件工具—从解压目录中安全收集日志"""
 
-import shutil
-import time
 from pathlib import Path
 
 from astrbot.api import logger
 
 
 def _safe_read(path: Path, extract_dir: Path) -> str:
+    """仅在文件位于允许的解压目录内时才读取"""
     resolved = path.resolve()
     if not str(resolved).startswith(str(extract_dir.resolve())):
         return ""
@@ -19,6 +18,7 @@ def _safe_read(path: Path, extract_dir: Path) -> str:
 
 
 def _is_safe_symlink(path: Path, extract_dir: Path) -> bool:
+    """检查符号链接是否解析到解压目录内的路径"""
     try:
         resolved = path.resolve()
         return str(resolved).startswith(str(extract_dir.resolve()))
@@ -27,6 +27,7 @@ def _is_safe_symlink(path: Path, extract_dir: Path) -> bool:
 
 
 def collect_logs(extract_dir: Path) -> str:
+    """将解压目录中所有 .log/.txt/.json 文件拼接成一个字符串"""
     root = extract_dir.resolve()
     logs = []
     for f in extract_dir.rglob("*"):
@@ -41,6 +42,7 @@ def collect_logs(extract_dir: Path) -> str:
 
 
 def collect_latest_log(extract_dir: Path) -> str:
+    """尝试读取主崩溃日志（游戏崩溃前的输出.txt / latest.log）"""
     root = extract_dir.resolve()
     for name, path in [
         ("游戏崩溃前的输出.txt", extract_dir / "游戏崩溃前的输出.txt"),
@@ -61,23 +63,3 @@ def collect_latest_log(extract_dir: Path) -> str:
             if c.strip():
                 return c
     return ""
-
-
-def cleanup_old_files(data_path: Path, max_age_days: int):
-    try:
-        rd = data_path / "错误报告"
-        if not rd.is_dir():
-            return
-        cutoff = time.time() - max_age_days * 86400
-        for item in rd.iterdir():
-            try:
-                if item.stat().st_mtime < cutoff:
-                    if item.is_dir():
-                        shutil.rmtree(item, ignore_errors=True)
-                    else:
-                        item.unlink(missing_ok=True)
-                    logger.info(f"清理旧报告: {item.name}")
-            except Exception as e:
-                logger.debug(f"清理 {item.name} 出错: {e}")
-    except Exception as e:
-        logger.debug(f"清理旧文件出错: {e}")

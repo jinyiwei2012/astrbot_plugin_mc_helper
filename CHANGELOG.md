@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.1.1 (2026-06-01)
+
+### 🔧 Bug 修复
+- **`_duplicate_mods.py` 捕获组缺失**：正则缺少 `()` 导致 `group(1)` 运行时崩溃（`IndexError`）
+- **`_security.py` ZipFile 传参错误**：`ZipFile.read()` 第二参数为密码而非字节数，大 JSON 文件必崩
+- **`_security.py` JSON 扫描**：仅扫描头部 256KB 可被绕过，改为头尾各半采样
+- **`_security.py` DNS 无超时**：`getaddrinfo` 卡死时无超时，加 `asyncio.wait_for(..., timeout=10)`
+- **`_security.py` Unicode 同形字绕过**：文件名后缀检查可通过全角字符绕过，加 `unicodedata.normalize("NFKC")`
+- **`_handlers.py` uid 不一致**：`record_malicious` 用消毒 uid 但 `is_blacklisted` 查原始 uid，黑名单永不命中
+- **`_handlers.py` 配置键错位**：`mc_config` 用原始 uid 存储但 `_save_report` 用消毒 uid 读取，配置永久降级
+
+### 🛠 重构与优化
+- **移除 `main.py:ask_ai` 薄包装**：`_handlers.py` 直调 `lib._ai.ask_ai`
+- **`_collect_files` 抽取**：`on_message` 和 `_find_file` 复用相同文件提取逻辑
+- **`_PinnedResolver` 死字段**：移除未使用的 `loop` 参数
+- **`_file_utils.py` 死代码**：移除从未被调用的 `cleanup_old_files`
+- **`_renderer.py` XSS 防护**：降级路径和 `md_to_html` 添加 `html.escape`
+- **`_save_report` 扁平存储**：丢失子目录结构改为保留相对路径
+
+### 📚 文档
+- **全面中文注释**：所有模块、类、函数、关键逻辑添加中文注释
+- **`CHANGELOG.md`**：补充本轮修复记录
+
 ## v1.1.0 (2026-06-01)
 
 ### ✨ 新功能

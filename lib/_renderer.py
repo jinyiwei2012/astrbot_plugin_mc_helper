@@ -1,8 +1,9 @@
-"""Markdown to HTML/image rendering."""
+"""Markdown 转 HTML/图片渲染，用于发送格式化回复"""
+
+import html
 
 try:
     import markdown as _md_lib
-
     _HAS_MD = True
 except ImportError:
     _md_lib = None
@@ -46,13 +47,16 @@ _HTML_TMPL = """<!DOCTYPE html>
 
 
 def md_to_html(md_text: str) -> str:
+    """将 markdown 文本转换为 HTML 文档，供 astrbot 的 html_render 使用"""
+    safe = html.escape(md_text)
     if not _HAS_MD:
-        return f"<pre>{md_text}</pre>"
+        return f"<pre>{safe}</pre>"
     try:
         body = _md_lib.markdown(
             md_text,
             extensions=["extra", "codehilite", "nl2br"],
         )
     except Exception:
-        body = f"<pre>{md_text}</pre>"
+        # markdown 解析失败时降级为预格式化文本
+        body = f"<pre>{safe}</pre>"
     return _HTML_TMPL.replace("__BODY__", body)

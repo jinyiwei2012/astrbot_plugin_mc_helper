@@ -1,4 +1,8 @@
-"""Solution database CRUD operations."""
+"""方案库 CRUD 操作
+
+方案库 JSON 结构：
+  {"<分类>": {"<错误关键词>": {"solution": "<解决方案文本>"}}}
+"""
 
 import json
 from pathlib import Path
@@ -8,6 +12,7 @@ from astrbot.api import logger
 
 
 def _load_json(path: Path, label: str, fallback: dict) -> dict:
+    """安全加载 JSON 文件，出错时返回 fallback"""
     try:
         if path.exists():
             with open(path, "r", encoding="utf-8") as f:
@@ -26,6 +31,7 @@ def load_duplicate_mods(path: Path) -> dict:
 
 
 def get_solution(db: dict, key: str) -> Optional[str]:
+    """在所有分类中搜索匹配错误关键词的方案"""
     for entries in db.values():
         if key in entries:
             entry = entries[key]
@@ -34,6 +40,7 @@ def get_solution(db: dict, key: str) -> Optional[str]:
 
 
 def count_solutions(db: dict) -> int:
+    """返回所有分类中的条目总数"""
     count = 0
     for v in db.values():
         if isinstance(v, dict):

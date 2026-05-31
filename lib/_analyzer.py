@@ -1,4 +1,4 @@
-"""Error detail extraction, enrichment, and local solution matching."""
+"""错误详情提取、方案丰富和本地方案匹配"""
 
 import re
 from typing import Callable, Optional
@@ -25,6 +25,10 @@ from ._utils import (
 
 
 def extract_report_details(error_text: str) -> list[str]:
+    """解析 Minecraft 崩溃报告，提取关键诊断信息
+
+    返回人类可读的要点列表（涉及文件、模组、退出码等）
+    """
     details = []
 
     jar_paths = RE_JAR_PATH.findall(error_text)
@@ -105,7 +109,10 @@ def extract_report_details(error_text: str) -> list[str]:
     return details
 
 
+# ── 建议生成 ──
+
 def _val(d: str) -> str:
+    """从详情字符串中提取 '：' 后面的值部分"""
     return d.split("：", 1)[1] if "：" in d else ""
 
 
@@ -143,6 +150,7 @@ def _tip_dup_mods(d: str) -> str:
     return "检测到重复模组！打开 .minecraft/mods 文件夹，搜到上面对应的文件名，只保留一个版本，删除其余。"
 
 
+# 详情前缀到建议生成器的映射
 _TIP_RULES: list[tuple[tuple[str, ...], Callable[[str], str]]] = [
     (("涉及文件", "涉及模组"), _tip_jar_files),
     (("坐标",), _tip_coords),
@@ -155,6 +163,7 @@ _TIP_RULES: list[tuple[tuple[str, ...], Callable[[str], str]]] = [
 
 
 def _match_fallback_tip(d: str) -> str | None:
+    """为没有专用处理器的详情类型生成建议"""
     if d.startswith("路径") and ".mca" in d:
         return "发现区块文件(.mca)损坏，用 MCA Selector 打开该文件，找到损坏的区块并删除（游戏会自动重新生成）。"
     if d.startswith("路径") and ".json" in d:
@@ -174,6 +183,7 @@ def _match_fallback_tip(d: str) -> str | None:
 
 
 def _build_tips(details: list[str]) -> list[str]:
+    """从提取的详情中构建可操作的建议"""
     tips = []
     for d in details:
         for prefixes, handler in _TIP_RULES:
@@ -190,6 +200,7 @@ def _build_tips(details: list[str]) -> list[str]:
 
 
 def enrich_solution(solution: str, details: list[str]) -> str:
+    """在解决方案下方附加诊断详情和操作建议"""
     result = solution
     tips = _build_tips(details) if details else []
 
@@ -206,7 +217,10 @@ def enrich_solution(solution: str, details: list[str]) -> str:
     return result
 
 
+# ── 本地方案搜索 ──
+
 def _search_solutions(solutions_db: dict, search_text: str) -> Optional[str]:
+    """在方案库中搜索匹配的错误关键词（子串匹配）"""
     for entries in solutions_db.values():
         for pattern, entry in entries.items():
             solution = entry["solution"] if isinstance(entry, dict) else entry
@@ -216,6 +230,7 @@ def _search_solutions(solutions_db: dict, search_text: str) -> Optional[str]:
 
 
 def search_local_solutions(solutions_db: dict, error_text: str) -> Optional[str]:
+    """搜索本地方案库，先全文匹配再根据退出码匹配"""
     result = _search_solutions(solutions_db, error_text.lower())
     if result:
         return result
@@ -230,7 +245,10 @@ def search_local_solutions(solutions_db: dict, error_text: str) -> Optional[str]
     return None
 
 
+# ── 错误关键词提取 ──
+
 def extract_error_key(error_text: str) -> Optional[str]:
+    """提取规范化的错误关键词（异常类、退出码等）用于方案库查询"""
     match = re.search(
         r"(?:Caused by:\s*)?(java\.\w+(?:\.\w+)+Error|java\.\w+(?:\.\w+)+Exception"
         r"|Exit Code[:\s]*-?\d+|Couldn't\s+\w+|Failed to \w+"
@@ -240,6 +258,7 @@ def extract_error_key(error_text: str) -> Optional[str]:
     if match:
         return match.group(1).strip()
 
+    # 降级：从错误文本中提取第一个有意义的行
     for line in error_text.split("\n"):
         line = line.strip()
         if line.startswith("java.") or "Exception" in line or "Error" in line:

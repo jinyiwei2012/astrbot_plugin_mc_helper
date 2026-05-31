@@ -1,20 +1,24 @@
-"""Module-level constants and compiled regex patterns."""
+"""模块级常量和预编译正则表达式，供各模块共享"""
 
 import re
 
-# Jar file patterns
-_JAR_RE = r"[\w\-+]+(?:mc[\w\-+.]+)?(?:\d[\w.+]*)?\.jar"
+# ── Jar 文件名模式 ──
+# 匹配类似 "OptiFine_1.20.1.jar" 或 "sodium-fabric-mc1.20.1-0.5.8.jar" 的文件名
+JAR_RE = r"[\w\-+]+(?:mc[\w\-+.]+)?(?:\d[\w.+]*)?\.jar"
+# 匹配 mods/ 目录下的 jar 路径
 RE_JAR_PATH = re.compile(
-    r"(?:^|[\s\\/])mods[\\/]" + _JAR_RE,
+    r"(?:^|[\s\\/])mods[\\/]" + JAR_RE,
     re.IGNORECASE,
 )
-RE_JAR_NAME = re.compile(_JAR_RE, re.IGNORECASE)
+# 匹配任意位置的裸 jar 文件名
+RE_JAR_NAME = re.compile(JAR_RE, re.IGNORECASE)
+# 匹配 "Mod: filename.jar" 或 "File: filename.jar" 行
 RE_MOD_FILE = re.compile(
-    r"(?:Mod|Mod File|File):\s*" + _JAR_RE,
+    r"(?:Mod|Mod File|File):\s*" + JAR_RE,
     re.IGNORECASE,
 )
 
-# Error report patterns
+# ── 错误报告提取模式 ──
 RE_DUP_SECTION = re.compile(
     r"Duplicate\s*Mod[s]?[:\s]*\n((?:.{0,300}\n?){0,15})",
     re.IGNORECASE,
@@ -41,7 +45,8 @@ RE_ERROR_CLS = re.compile(
     r"ConcurrentModificationException)[:\s]*([^\n]*)"
 )
 
-# Skip lists
+# ── 跳过滤列表 ──
+# 定位 mod 相关崩溃时忽略的框架调用栈
 SKIP_STACK = (
     "cpw.mods.modlauncher",
     "cpw.mods.bootstraplauncher",
@@ -52,50 +57,33 @@ SKIP_STACK = (
     "org.spongepowered.asm",
     "net.minecraftforge.fml.loading",
 )
+# 始终存在且不可能是根因的模组 ID
 SKIP_MOD_ID = {
     "minecraft",
     "java",
     "cpw",
 }
 
+# AI 调用失败时的返回前缀，用于判断是否降级到本地方案
 FAIL_PREFIXES = (
     "无法获取 AI 模型",
     "AI 未能生成有效的解决方案",
     "AI 分析调用失败",
 )
 
-# Security
+# ── 安全限制 ──
+# 上传压缩包中禁止出现的文件扩展名
 BLACKLIST_EXTS = {
-    ".exe",
-    ".com",
-    ".msi",
-    ".scr",
-    ".sh",
-    ".bin",
-    ".dll",
-    ".so",
-    ".dylib",
-    ".vbs",
-    ".js",
-    ".cmd",
-    ".ps1",
-    ".jar",
+    ".exe", ".com", ".msi", ".scr", ".sh", ".bin",
+    ".dll", ".so", ".dylib", ".vbs", ".js", ".cmd",
+    ".ps1", ".jar",
 }
+# 扫描 .json 文件时查找的危险命令关键字
 DANGEROUS_CMDS = {
-    "powershell",
-    "curl",
-    "wget",
-    "certutil",
-    "format",
-    "reg ",
-    "mshta",
-    "rundll32",
-    "wmic",
-    "cscript",
-    "schtasks",
+    "powershell", "curl", "wget", "certutil", "format",
+    "reg ", "mshta", "rundll32", "wmic", "cscript", "schtasks",
 }
 
-# Limits
 MAX_ZIP_FILES = 1000
 MAX_FILE_SIZE = 10 * 1024 * 1024
 MAX_EXTRACT_SIZE = 50 * 1024 * 1024

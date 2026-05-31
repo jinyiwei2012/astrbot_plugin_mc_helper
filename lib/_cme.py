@@ -1,4 +1,4 @@
-"""CME (ConcurrentModificationException) crash analysis with CMESuckMyDuck."""
+"""CME（ConcurrentModificationException）崩溃分析与 CMESuckMyDuck 集成"""
 
 import re
 from pathlib import Path
@@ -7,6 +7,7 @@ from ._utils import RE_STACK, SKIP_STACK
 
 
 def analyze_cme_log(log_path: Path) -> str | None:
+    """解析 CMESuckMyDuck.log，识别参与 CME 的线程和模组"""
     try:
         content = log_path.read_text(encoding="utf-8", errors="ignore")
     except (OSError, UnicodeDecodeError):
@@ -56,6 +57,7 @@ def analyze_cme_log(log_path: Path) -> str | None:
 
 
 def generate_cme_guide(error_text: str) -> str | None:
+    """当没有 CMESuckMyDuck.log 时，生成安装和使用指南"""
     stacks = RE_STACK.findall(error_text)
     meaningful = [s for s in stacks if not s[0].startswith(SKIP_STACK)]
     if not meaningful:

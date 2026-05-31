@@ -1,4 +1,4 @@
-"""Command and message handlers."""
+"""命令和消息处理器—所有业务逻辑在此实现"""
 
 import random
 import re
@@ -17,29 +17,50 @@ from ._security import download_zip, scan_zip, extract_safe_files, RateLimiter
 from ._file_utils import collect_logs, collect_latest_log
 from ._renderer import md_to_html
 from ._cme import analyze_cme_log, generate_cme_guide
+from ._ai import ask_ai
 from ._duplicate_mods import check_duplicate_mods
 
+# PCL/PCLCE 导出的压缩包文件名格式（例如 "错误报告-2025-06-01_14.30.00.zip"）
 _RE_ZIP_NAME = re.compile(r"错误报告-(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}-\d{1,2}-\d{4})_\d{1,2}\.\d{2}\.\d{2}\.zip")
+# 每次保存时触发旧报告清理的概率
 _CLEANUP_RATIO = 0.25
 
 
 class Handlers:
+    """所有消息、命令和错误报告处理的集合"""
+
     def __init__(self, plugin):
         self.p = plugin
         self.rate_limiter = RateLimiter()
 
-    # ── helpers ──
+    # ── 辅助方法 ──
+
+    @staticmethod
+    def _collect_files(msg) -> list[File]:
+        """从消息中提取所有 File 组件（包括 Reply 链中的）"""
+        fcs = []
+        for c in msg.message:
+            if isinstance(c, File):
+                fcs.append(c)
+            elif isinstance(c, Reply) and c.chain:
+                for rc in c.chain:
+                    if isinstance(rc, File):
+                        fcs.append(rc)
+        return fcs
 
     def _ai_failed(self, result: str) -> bool:
+        """判断 AI 响应是否表示调用失败"""
         return not result or result.strip() == "" or result.startswith(FAIL_PREFIXES)
 
     def _enrich(self, text: str, source: str) -> str:
+        """在方案文本后附加提取的错误详情和重复模组警告"""
         details = extract_report_details(source)
         dup = check_duplicate_mods(self.p.dup_data, source)
         result = enrich_solution(text, details)
         return f"{dup}\n\n{result}" if dup else result
 
     async def _send_img(self, event, md: str):
+        """将 markdown 渲染成图片并作为回复发送"""
         html = md_to_html(md)
         url = await self.p.context.html_render(html, {}, return_url=True)
         yield event.image_result(url)
@@ -50,24 +71,18 @@ class Handlers:
     # ── on_message ──
 
     async def on_message(self, event: AstrMessageEvent):
+        """处理上传的文件—将错误报告压缩包转入分析管线"""
         if not self.p._is_allowed(event) or self.p.blacklist.is_blacklisted(event.unified_msg_origin):
             return
         msg = event.message_obj
         if not msg:
             return
 
-        fcs = []
-        for c in msg.message:
-            if isinstance(c, File):
-                fcs.append(c)
-            elif isinstance(c, Reply) and c.chain:
-                for rc in c.chain:
-                    if isinstance(rc, File):
-                        fcs.append(rc)
+        fcs = self._collect_files(msg)
 
+        # 记住每个会话的第一个文件，供 /mc_check 降级使用
         if fcs:
             sid = event.unified_msg_origin
-            self.p.recent.pop(sid, None)
             self.p.recent[sid] = fcs[0]
             if len(self.p.recent) > MAX_RECENT_FILES:
                 for k in list(self.p.recent)[:-RECENT_FILES_KEEP]:
@@ -103,6 +118,7 @@ class Handlers:
     # ── mc_check ──
 
     async def mc_check(self, event: AstrMessageEvent, error_text: str = ""):
+        """手动错误查询—依次尝试附件、AI 分析、本地方案库"""
         if not self.p._is_allowed(event):
             return
         fc = self._find_file(event)
@@ -121,7 +137,7 @@ class Handlers:
             yield event.plain_result("请求过于频繁，请稍后再试。")
             return
 
-        ai = await self.p.ask_ai(event, error_text)
+        ai = await ask_ai(self.p.context, event, error_text)
         md = self._cfg("ai_result_max_chars", 2000)
 
         if self._ai_failed(ai):
@@ -143,7 +159,7 @@ class Handlers:
 
         ek = extract_error_key(error_text)
         sc = self._cfg("auto_save_category", "AI生成")
-        if ek and not self.p.get_solution(ek):
+        if ek and not await self.p.get_solution(ek):
             await self.p.save_solution(ek, ai, sc)
             async for r in self._send_img(event, f"**🤖 AI 分析结果**\n\n{result}\n\n*（已自动保存到本地知识库）*"):
                 yield r
@@ -154,6 +170,7 @@ class Handlers:
     # ── mc_add_solution ──
 
     async def mc_add_solution(self, event: AstrMessageEvent):
+        """向本地方案库添加一条自定义方案"""
         if not self.p._is_allowed(event):
             return
         text = event.message_str.strip()
@@ -170,7 +187,8 @@ class Handlers:
     # ── mc_reports ──
 
     async def mc_reports(self, event: AstrMessageEvent):
-        uid = event.unified_msg_origin
+        """显示用户最近的分析报告列表"""
+        uid = self._sanitize_uid(event.unified_msg_origin)
         folder = self.p.reports_path / uid
         if not folder.is_dir():
             yield event.plain_result("暂无历史分析记录。")
@@ -197,7 +215,8 @@ class Handlers:
     # ── mc_config ──
 
     async def mc_config(self, event: AstrMessageEvent, args: str = ""):
-        uid = event.unified_msg_origin
+        """查看或修改个人偏好设置"""
+        uid = self._sanitize_uid(event.unified_msg_origin)
         parts = args.strip().split(maxsplit=2)
 
         if not args or parts[0] == "view":
@@ -236,32 +255,36 @@ class Handlers:
         else:
             yield event.plain_result(f"未知配置项: {key}")
 
-    # ── file lookup ──
+    # ── 文件查找 ──
 
     def _find_file(self, event) -> File | None:
+        """从当前消息或会话最近文件中定位 File 附件"""
         msg = event.message_obj
         if msg:
-            for c in msg.message:
-                if isinstance(c, Reply) and c.chain:
-                    for rc in c.chain:
-                        if isinstance(rc, File):
-                            return rc
-                if isinstance(c, File):
-                    return c
+            fcs = self._collect_files(msg)
+            if fcs:
+                return fcs[0]
         fc = self.p.recent.get(event.unified_msg_origin)
         if fc:
             return fc
         return None
 
-    # ── error report pipeline ──
+    # ── 错误报告处理管线 ──
+
+    @staticmethod
+    def _sanitize_uid(uid: str) -> str:
+        """移除 uid 中的危险字符，确保安全用于文件系统"""
+        return re.sub(r"[^\w\-]", "_", uid)
 
     async def _handle_error_report(self, event, fc):
-        uid = event.unified_msg_origin
-        if self.p.blacklist.is_blacklisted(uid):
+        """端到端处理管线：下载 → 扫描 → 解压 → 分析 → 回复"""
+        raw_uid = event.unified_msg_origin
+        uid = self._sanitize_uid(raw_uid)
+        if self.p.blacklist.is_blacklisted(raw_uid):
             yield event.plain_result("你已被限制使用此功能。")
             return
 
-        if not self.rate_limiter.allow(uid):
+        if not self.rate_limiter.allow(raw_uid):
             yield event.plain_result("请求过于频繁，请稍后再试。")
             return
 
@@ -285,7 +308,7 @@ class Handlers:
                     yield event.plain_result("压缩包内文件过多，已拒绝。")
                 else:
                     logger.warning(f"黑名单文件: {bl}")
-                    self.p.blacklist.record_malicious(uid, self._cfg("max_malicious_uploads", 3))
+                    self.p.blacklist.record_malicious(raw_uid, self._cfg("max_malicious_uploads", 3))
                     yield event.plain_result("压缩包包含不允许的文件类型，已拒绝处理。")
                 shutil.rmtree(edir, ignore_errors=True)
                 return
@@ -314,7 +337,7 @@ class Handlers:
         fb = self._cfg("ai_source_fallback_chars", 100_000)
         source = latest[:mb] if latest and len(latest) > 200 else logs[:fb]
 
-        ai = await self.p.ask_ai(event, source)
+        ai = await ask_ai(self.p.context, event, source)
         md = self._cfg("ai_result_max_chars", 2000)
 
         if self._ai_failed(ai):
@@ -337,6 +360,7 @@ class Handlers:
         if dup:
             result = f"{dup}\n\n{result}"
 
+        # 对 ConcurrentModificationException 特殊处理，配合 CMESuckMyDuck
         if "ConcurrentModificationException" in logs:
             cme_log = edir / "CMESuckMyDuck.log"
             if cme_log.is_file():
@@ -351,9 +375,9 @@ class Handlers:
         ek = extract_error_key(logs)
         sc = self._cfg("auto_save_category", "AI生成")
         suffix = "\n\n*（已自动保存到本地知识库）*"
-        if ek and not self.p.get_solution(ek):
+        if ek and not await self.p.get_solution(ek):
             await self.p.save_solution(ek, ai, sc)
-            async for r in self._send_img(event, f"**🤖 AI 分析结果**\n\n{result}{suffix}"):
+            async for r in self._send_img(event, f"**🤖 AI 分析结果**\n\n{result}\n\n*（已自动保存到本地知识库）*"):
                 yield r
         else:
             async for r in self._send_img(event, f"**🤖 AI 分析结果**\n\n{result}"):
@@ -362,9 +386,10 @@ class Handlers:
         self._save_report(uid, edir, result)
         shutil.rmtree(edir, ignore_errors=True)
 
-    # ── report persistence ──
+    # ── 报告持久化 ──
 
     def _save_report(self, uid: str, extract_dir: Path, analysis: str):
+        """将提取的日志和分析结果保存到磁盘，然后概率触发清理"""
         ts = time.strftime("%Y%m%d_%H%M%S")
         dst = self.p.reports_path / uid / ts
         dst.mkdir(parents=True, exist_ok=True)
@@ -372,7 +397,6 @@ class Handlers:
         exts = self.p.get_user_cfg(uid, "save_exts", [".log", ".txt", ".json"])
         root = extract_dir.resolve()
         log_dir = dst / "原始log"
-        log_dir.mkdir(parents=True, exist_ok=True)
         for f in extract_dir.rglob("*"):
             if not f.is_file() or f.suffix.lower() not in exts:
                 continue
@@ -387,7 +411,11 @@ class Handlers:
                 c = f.read_text(encoding="utf-8", errors="ignore")
                 if not c.strip():
                     continue
-                (log_dir / f.name).write_text(c, encoding="utf-8")
+                # 保留相对目录结构
+                rel = f.relative_to(extract_dir)
+                target = log_dir / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(c, encoding="utf-8")
             except (OSError, UnicodeDecodeError) as e:
                 logger.debug(f"保存日志失败: {e}")
 
@@ -398,6 +426,7 @@ class Handlers:
             self._cleanup_old_reports(uid)
 
     def _cleanup_old_reports(self, uid: str):
+        """删除超过 max_report_age_days 天的旧报告"""
         try:
             folder = self.p.reports_path / uid
             if not folder.is_dir():

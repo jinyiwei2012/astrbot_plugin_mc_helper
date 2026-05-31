@@ -1,4 +1,4 @@
-"""AI integration module."""
+"""AI 集成模块—将错误文本发送到配置的 LLM 进行分析"""
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
@@ -6,6 +6,11 @@ from astrbot.api.star import Context
 
 
 async def ask_ai(context: Context, event: AstrMessageEvent, error_text: str) -> str:
+    """将 Minecraft 错误日志发送给 LLM 并返回分析结果
+
+    对长文本进行截断，并在 prompt 中加入防护措施
+    防止用户提供的日志内容进行 prompt 注入
+    """
     try:
         pid = await context.get_current_chat_provider_id(event.unified_msg_origin)
         if not pid:
@@ -13,6 +18,7 @@ async def ask_ai(context: Context, event: AstrMessageEvent, error_text: str) -> 
 
         text = error_text
         if len(text) > 12000:
+            # 保留头尾，丢弃中间部分以节省上下文
             text = text[:8000] + "\n... (已截断) ...\n" + text[-4000:]
 
         prompt = (
