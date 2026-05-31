@@ -84,6 +84,9 @@ BLACKLIST_EXTS = {
     ".dylib",
     ".vbs",
     ".js",
+    ".cmd",
+    ".ps1",
+    ".jar",
 }
 DANGEROUS_CMDS = (
     "powershell",
