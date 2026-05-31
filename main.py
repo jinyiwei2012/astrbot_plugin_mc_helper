@@ -11,7 +11,7 @@ import aiohttp
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star
 from astrbot.api import logger
-from astrbot.api.message_components import File
+from astrbot.api.message_components import File, Reply
 from astrbot.api import AstrBotConfig
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
@@ -79,24 +79,32 @@ class McHelperPlugin(Star):
         if not message_obj:
             return
 
+        file_comps = []
         for comp in message_obj.message:
             if isinstance(comp, File):
-                file_name = comp.name or ""
-                zip_pattern = r"错误报告-2026-\d{1,2}-\d{1,2}_\d{2}\.\d{2}\.\d{2}\.zip"
-                if file_name.endswith(".zip"):
-                    if re.match(zip_pattern, file_name):
-                        yield event.plain_result(
-                            "检测到 PCL 错误报告压缩包。\n"
-                            "请引用该文件并发送 /mc_check 开始分析。"
-                        )
-                        return
-                    else:
-                        yield event.plain_result(
-                            "压缩包命名格式不正确，仅接受 PCL/PCLCE 导出的错误报告。\n"
-                            "请使用 PCL 或 PCLCE 的「导出错误报告」功能，"
-                            "将生成的压缩包发送给我（文件名格式：错误报告-2026-5-31_18.30.06.zip）。"
-                        )
-                        return
+                file_comps.append(comp)
+            elif isinstance(comp, Reply) and comp.chain:
+                for replied_comp in comp.chain:
+                    if isinstance(replied_comp, File):
+                        file_comps.append(replied_comp)
+
+        for file_comp in file_comps:
+            file_name = file_comp.name or ""
+            zip_pattern = r"错误报告-2026-\d{1,2}-\d{1,2}_\d{2}\.\d{2}\.\d{2}\.zip"
+            if file_name.endswith(".zip"):
+                if re.match(zip_pattern, file_name):
+                    yield event.plain_result(
+                        "检测到 PCL 错误报告压缩包。\n"
+                        "请引用该文件并发送 /mc_check 开始分析。"
+                    )
+                    return
+                else:
+                    yield event.plain_result(
+                        "压缩包命名格式不正确，仅接受 PCL/PCLCE 导出的错误报告。\n"
+                        "请使用 PCL 或 PCLCE 的「导出错误报告」功能，"
+                        "将生成的压缩包发送给我（文件名格式：错误报告-2026-5-31_18.30.06.zip）。"
+                    )
+                    return
 
     @filter.command("mc_help")
     async def mc_help(self, event: AstrMessageEvent):
@@ -111,11 +119,16 @@ class McHelperPlugin(Star):
 
     @filter.command("mc_check")
     async def mc_check(self, event: AstrMessageEvent, error_text: str = ""):
-        # 先检查消息中是否有引用的文件
+        # 先检查消息中是否有引用的文件（包括回复/引用消息中的文件）
         file_comp = None
         message_obj = event.message_obj
         if message_obj:
             for comp in message_obj.message:
+                if isinstance(comp, Reply) and comp.chain:
+                    for replied_comp in comp.chain:
+                        if isinstance(replied_comp, File):
+                            file_comp = replied_comp
+                            break
                 if isinstance(comp, File):
                     file_comp = comp
                     break
