@@ -9,7 +9,7 @@ from ._utils import RE_STACK, SKIP_STACK
 def analyze_cme_log(log_path: Path) -> str | None:
     try:
         content = log_path.read_text(encoding="utf-8", errors="ignore")
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         return None
 
     mod_traces = {}

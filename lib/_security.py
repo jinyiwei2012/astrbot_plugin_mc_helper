@@ -1,5 +1,6 @@
 """Zip security scanning and user blacklist management."""
 
+import asyncio
 import ipaddress
 import json
 import re
@@ -37,7 +38,7 @@ def _clean_fn(name: str) -> str:
     return cleaned
 
 
-def _validate_url(url: str):
+async def _validate_url(url: str) -> str:
     parsed = urlparse(url)
     if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
         raise ValueError("不允许的 URL 协议")
@@ -49,12 +50,14 @@ def _validate_url(url: str):
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
-        import socket
-
         try:
-            ip = ipaddress.ip_address(socket.gethostbyname(host))
+            loop = asyncio.get_running_loop()
+            addrinfo = await loop.getaddrinfo(host, None)
         except Exception:
             raise ValueError("DNS 解析失败")
+        if not addrinfo:
+            raise ValueError("DNS 解析失败")
+        ip = ipaddress.ip_address(addrinfo[0][4][0])
     for net in _PRIVATE_RANGES:
         if ip in net:
             raise ValueError("不允许访问内网地址")
@@ -62,7 +65,7 @@ def _validate_url(url: str):
 
 
 async def download_zip(file_url: str, zip_path: Path, timeout_sec: int = 120):
-    safe_url = _validate_url(file_url)
+    safe_url = await _validate_url(file_url)
     timeout = aiohttp.ClientTimeout(total=timeout_sec)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.get(safe_url) as resp:

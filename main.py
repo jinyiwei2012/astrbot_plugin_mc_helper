@@ -33,7 +33,7 @@ class McHelperPlugin(Star):
         self.solutions = load_db(self.db_path)
         self.dup_data = load_duplicate_mods(Path(__file__).parent / "data" / "duplicate_mods.json")
         self.blacklist = UserBlacklist(self.store_path / "user_blacklist.json")
-        self.reports_path = Path(__file__).parent / "data" / "错误报告"
+        self.reports_path = self.store_path / "错误报告"
         self.reports_path.mkdir(parents=True, exist_ok=True)
         self.user_cfg_path = self.store_path / "user_config.json"
         self.user_configs: dict = self._load_user_configs()

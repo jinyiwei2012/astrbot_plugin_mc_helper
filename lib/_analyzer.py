@@ -180,7 +180,7 @@ def enrich_solution(solution: str, details: list[str]) -> str:
                         cls = loc.split("(")[0].strip() if "(" in loc else loc
                         short = cls.split(".")[-1] if "." in cls else cls
                         tips.append(f"错误出现在 {short} 类中。如果该类和模组相关，尝试更新或删除对应的模组。")
-                    except Exception:
+                    except (ValueError, IndexError, AttributeError):
                         pass
                 elif d.startswith("系统"):
                     if "linux" in _val(d).lower() or "mac" in _val(d).lower():
