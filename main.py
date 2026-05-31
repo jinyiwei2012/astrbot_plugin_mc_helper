@@ -15,6 +15,74 @@ from astrbot.api.message_components import File, Reply
 from astrbot.api.star import Context, Star, StarTools
 
 
+# Module-level compiled regex patterns
+_RE_JAR_PATH = re.compile(
+    r"[\w\\/.\-+]*mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
+    re.IGNORECASE,
+)
+_RE_JAR_NAME = re.compile(r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", re.IGNORECASE)
+_RE_MOD_FILE = re.compile(
+    r"(?:Mod|Mod File|File):\s*([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
+    re.IGNORECASE,
+)
+_RE_DUP_SECTION = re.compile(
+    r"Duplicate\s*Mod[s]?[:\s]*\n((?:.{0,300}\n?){0,15})",
+    re.IGNORECASE,
+)
+_RE_EXIT_CODE = re.compile(r"Exit Code[:\s]*(-?\d+)")
+_RE_STACK = re.compile(r"at\s+([\w.]+)\(([^:]+:\d+)\)")
+_RE_COORDS = re.compile(r"(?:Tile Entity at|Block at|Position)\s*\[?(-?\d+)[,; ]\s*(-?\d+)[,; ]\s*(-?\d+)\]?")
+_RE_MEMORY = re.compile(r"(\d+)\s*(MB|GB|MiB|GiB)", re.IGNORECASE)
+_RE_SERVER = re.compile(
+    r"(?:^|\n)(?:Server|Server IP|Host|Server Address)[:\s]*([\w.\-]+(?::\d+)?)",
+    re.IGNORECASE,
+)
+_RE_PATH = re.compile(
+    r"(?:\.minecraft[\\/](?!libraries)[\w\\/.\-]+(?:\.log|\.txt|\.json|\.jar|\.zip|\.mca))",
+    re.IGNORECASE,
+)
+_RE_JAVA = re.compile(r"Java\s*(?:Version|VM|Runtime)[:\s]*([\d.]+)", re.IGNORECASE)
+_RE_OS = re.compile(r"Operating\s+System[:\s]*([^\n]+)", re.IGNORECASE)
+_RE_MOD_ID = re.compile(r"([a-z_]+:[a-z_]+)")
+_RE_EXCEPTION = re.compile(r"(?:Caused by|Description)[:\s]*([^\n]+)")
+_RE_ERROR_CLS = re.compile(
+    r"(java\.\w+(?:\.\w+)+Error|java\.\w+(?:\.\w+)+Exception|"
+    r"IllegalStateException|NullPointerException|"
+    r"ConcurrentModificationException)[:\s]*([^\n]*)"
+)
+_SKIP_STACK = (
+    "cpw.mods.modlauncher",
+    "cpw.mods.bootstraplauncher",
+    "java.lang",
+    "jdk.internal",
+    "sun.reflect",
+    "net.minecraft.launchwrapper",
+    "org.spongepowered.asm",
+    "net.minecraftforge.fml.loading",
+)
+_SKIP_MOD_ID = {
+    "minecraft",
+    "java",
+    "net",
+    "com",
+    "org",
+    "cpw",
+    "it",
+    "de",
+    "fr",
+    "io",
+    "pl",
+}
+
+try:
+    import markdown as _md_lib
+
+    _HAS_MD = True
+except ImportError:
+    _md_lib = None
+    _HAS_MD = False
+
+
 class McHelperPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig = None):
         super().__init__(context)
@@ -199,6 +267,9 @@ class McHelperPlugin(Star):
         if file_comps:
             session_id = event.unified_msg_origin
             self._recent_files[session_id] = file_comps[0]
+            if len(self._recent_files) > 200:
+                for k in list(self._recent_files)[:-100]:
+                    del self._recent_files[k]
 
         for file_comp in file_comps:
             file_name = file_comp.name or ""
@@ -340,7 +411,8 @@ class McHelperPlugin(Star):
                         yield event.plain_result(f"文件下载失败，HTTP {resp.status}")
                         return
                     with open(zip_path, "wb") as f:
-                        f.write(await resp.read())
+                        async for chunk in resp.content.iter_chunked(65536):
+                            f.write(chunk)
 
             extract_dir.mkdir(parents=True, exist_ok=True)
 
@@ -526,18 +598,11 @@ class McHelperPlugin(Star):
     def _extract_report_details(self, error_text: str) -> list[str]:
         details = []
 
-        jar_pattern = re.compile(
-            r"[\w\\/.\-+]*mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
-            re.IGNORECASE,
-        )
-        jar_paths = jar_pattern.findall(error_text)
+        jar_paths = _RE_JAR_PATH.findall(error_text)
         if jar_paths:
             details.append("涉及文件：" + "、".join(set(jar_paths[:3])))
 
-        mod_names = re.findall(
-            r"(?:Mod|Mod File|File):\s*([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
-            error_text,
-        )
+        mod_names = _RE_MOD_FILE.findall(error_text)
         if mod_names and not jar_paths:
             details.append("涉及模组：" + ", ".join(set(mod_names[:3])))
 
@@ -572,7 +637,7 @@ class McHelperPlugin(Star):
             if dup_files:
                 details.append("重复模组：" + "、".join(set(dup_files[:5])))
 
-        exit_code = re.search(r"Exit Code[:\s]*(-?\d+)", error_text)
+        exit_code = _RE_EXIT_CODE.search(error_text)
         if exit_code:
             details.append("退出代码：Exit Code " + exit_code.group(1))
 
@@ -596,29 +661,16 @@ class McHelperPlugin(Star):
             else:
                 details.append("异常：{}".format(ex_type))
 
-        skip_patterns = (
-            "cpw.mods.modlauncher",
-            "cpw.mods.bootstraplauncher",
-            "java.lang",
-            "jdk.internal",
-            "sun.reflect",
-            "net.minecraft.launchwrapper",
-            "org.spongepowered.asm",
-            "net.minecraftforge.fml.loading",
-        )
-        all_stacks = re.findall(r"at\s+([\w.]+)\(([^:]+:\d+)\)", error_text)
-        meaningful = [s for s in all_stacks if not s[0].startswith(skip_patterns)]
+        all_stacks = _RE_STACK.findall(error_text)
+        meaningful = [s for s in all_stacks if not s[0].startswith(_SKIP_STACK)]
         if meaningful:
             details.append("异常位置：{} ({})".format(meaningful[0][0], meaningful[0][1]))
 
-        coords = re.findall(
-            r"(?:Tile Entity at|Block at|Position)\s*\[?(-?\d+)[,; ]\s*(-?\d+)[,; ]\s*(-?\d+)\]?",
-            error_text,
-        )
+        coords = _RE_COORDS.findall(error_text)
         if coords:
             details.append("坐标：({}, {}, {})".format(coords[0][0], coords[0][1], coords[0][2]))
 
-        memory = re.findall(r"(\d+)\s*(MB|GB|MiB|GiB)", error_text, re.IGNORECASE)
+        memory = _RE_MEMORY.findall(error_text)
         if memory:
             details.append("内存：{} {}".format(memory[0][0], memory[0][1]))
 
@@ -797,9 +849,9 @@ class McHelperPlugin(Star):
             return f"AI 分析调用失败：{str(e)}\n\n建议手动搜索错误信息中的关键词获取解决方案。"
 
     def _md_to_html(self, md_text: str) -> str:
-        import markdown as md_lib
-
-        body = md_lib.markdown(
+        if not _HAS_MD:
+            return f"<pre>{md_text}</pre>"
+        body = _md_lib.markdown(
             md_text,
             extensions=["extra", "codehilite", "nl2br"],
         )
