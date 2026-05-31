@@ -12,8 +12,8 @@ from ._utils import BLACKLIST_EXTS, DANGEROUS_CMDS
 
 
 def _clean_fn(name: str) -> str:
-    """Remove trailing spaces/dots and control characters from a filename."""
-    cleaned = name.rstrip(" .")
+    """Sanitize filename: strip leading whitespace, trailing spaces/dots, control chars."""
+    cleaned = name.lstrip().rstrip(" .")
     cleaned = re.sub(r"[\x00-\x1f\x7f]", "", cleaned)
     return cleaned
 
@@ -48,7 +48,8 @@ def scan_zip(zip_path: Path) -> list[str]:
                 or cleaned.startswith("/")
                 or cleaned.startswith("..")
                 or "/../" in cleaned
-                or re.match(r"^\.{3,}/", cleaned)
+                or "\\..\\" in cleaned
+                or re.search(r"(?:^|[/\\])\.{2,}[/\\]", cleaned)
             ):
                 blacklisted.append(fn)
                 continue
@@ -77,7 +78,7 @@ def extract_safe_files(zip_path: Path, extract_dir: Path) -> int:
             if info.is_dir():
                 continue
             filename = _clean_fn(info.filename)
-            if not filename or filename.startswith(".."):
+            if not filename or re.search(r"(?:^|/)\.{2,}/", filename):
                 continue
             ext = Path(filename).suffix.lower()
             if ext not in (".log", ".txt", ".json"):
