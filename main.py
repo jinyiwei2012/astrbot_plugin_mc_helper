@@ -432,10 +432,6 @@ class McHelperPlugin(Star):
                         ".dylib",
                         ".vbs",
                         ".js",
-                        ".bat",
-                        ".cmd",
-                        ".ps1",
-                        ".jar",
                     }
                     blacklist_names = []
                     for info in infos:
