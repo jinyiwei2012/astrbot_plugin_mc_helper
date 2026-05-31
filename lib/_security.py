@@ -2,6 +2,7 @@
 
 import json
 import re
+import stat
 from pathlib import Path
 
 import aiohttp
@@ -29,6 +30,15 @@ async def download_zip(file_url: str, zip_path: Path, timeout_sec: int = 120):
                     f.write(chunk)
 
 
+def _is_symlink(info) -> bool:
+    """Check if a ZipInfo is a symlink entry based on external attributes."""
+    try:
+        mode = info.external_attr >> 16
+        return stat.S_ISLNK(mode)
+    except (AttributeError, TypeError):
+        return False
+
+
 def scan_zip(zip_path: Path) -> list[str]:
     import zipfile
 
@@ -40,6 +50,9 @@ def scan_zip(zip_path: Path) -> list[str]:
 
         for info in infos:
             if info.is_dir():
+                continue
+            if _is_symlink(info):
+                blacklisted.append(info.filename)
                 continue
             fn = info.filename
             cleaned = _clean_fn(fn)
@@ -73,12 +86,13 @@ def extract_safe_files(zip_path: Path, extract_dir: Path) -> int:
 
     total_size = 0
     extracted = 0
+    _re_traversal = re.compile(r"(?:^|[/\\])\.{2,}[/\\]")
     with zipfile.ZipFile(zip_path, "r") as zf:
         for info in zf.infolist():
-            if info.is_dir():
+            if info.is_dir() or _is_symlink(info):
                 continue
             filename = _clean_fn(info.filename)
-            if not filename or re.search(r"(?:^|/)\.{2,}/", filename):
+            if not filename or _re_traversal.search(filename):
                 continue
             ext = Path(filename).suffix.lower()
             if ext not in (".log", ".txt", ".json"):
