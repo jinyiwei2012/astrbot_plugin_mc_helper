@@ -1,0 +1,39 @@
+{
+  "ai_model_provider": {
+    "description": "用于分析错误报告的 LLM 提供商",
+    "type": "string",
+    "default": "",
+    "_special": "select_provider",
+    "hint": "留空则使用当前会话的 AI 模型。选择指定提供商可保证分析结果的一致性。"
+  },
+  "latest_log_max_bytes": {
+    "description": "发送给 AI 的 latest.log 最大字节数",
+    "type": "int",
+    "default": 2000000,
+    "hint": "控制发送给 AI 的日志大小，单位字节。建议 500000~3000000。"
+  },
+  "ai_result_max_chars": {
+    "description": "AI 分析结果回复的最大字符数",
+    "type": "int",
+    "default": 2000,
+    "hint": "控制 AI 回复的显示长度，超出的部分会被截断。"
+  },
+  "ai_source_fallback_chars": {
+    "description": "无 latest.log 时发送给 AI 的其他日志最大字符数",
+    "type": "int",
+    "default": 100000,
+    "hint": "当压缩包中没有 latest.log 时，使用其他日志文件的前 N 个字符。"
+  },
+  "auto_save_category": {
+    "description": "AI 生成的解决方案自动保存到哪个分类",
+    "type": "string",
+    "default": "AI生成",
+    "hint": "每次 AI 分析后会自动入库，此分类名会在 solutions.json 中创建。"
+  },
+  "download_timeout": {
+    "description": "下载压缩包的超时时间（秒）",
+    "type": "int",
+    "default": 120,
+    "hint": "下载错误报告压缩包的最大等待时间。"
+  }
+}

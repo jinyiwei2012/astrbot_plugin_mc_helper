@@ -1,0 +1,314 @@
+{
+  "内存/性能": {
+    "OutOfMemoryError": {
+      "solution": "你的 Minecraft 没内存啦！就像手机后台开太多应用会卡一样，MC 也需要更多内存。\n\n怎么办：\n1. 打开 PCL 启动器（或者 HMCL），找到这个版本的「设置」\n2. 找到「Java 参数」或者「内存设置」\n3. 把分配的内存调大，比如调到 4096MB（就是 4G）或者 6144MB（6G）\n4. 保存后重新启动游戏试试\n\n注意：如果你电脑本身只有 8G 内存，别调到 8G，要给系统留一点哦。"
+    },
+    "java.lang.OutOfMemoryError: PermGen space": {
+      "solution": "也是内存不够的问题（老版本的 Java 才会出现）。\n\n如果你用的是 Java 8 以下：在启动参数加一行 -XX:MaxPermSize=256m\n\n如果你用的是 Java 8 以上：参考上面 OutOfMemoryError 的解决方法就行。"
+    },
+    "Exit Code 805306369": {
+      "solution": "退出代码 805306369，内存分配出问题了。\n\n试试：\n1. 在 PCL 里调整内存设置\n2. 关掉其他占用内存的程序（浏览器、微信等）"
+    },
+    "Exit Code -805306369": {
+      "solution": "退出代码 -805306369，通常是内存不够或者模组太多了。\n\n试试：\n1. 在 PCL 里把内存调大一点\n2. 禁用一些不用的模组"
+    },
+    "Render distance too far": {
+      "solution": "你把渲染距离开太大了，电脑带不动。\n\n去视频设置里把渲染距离调低一点（比如 8 或者 12  chunk）。\n如果你装了很多模组或者光影，建议再调低一点。"
+    }
+  },
+  "网络连接": {
+    "Connection refused": {
+      "solution": "连不上服务器，服务器那边「拒绝」了你。\n\n检查一下：\n1. 确定服务器已经开了吗？（如果是朋友开的，问问他）\n2. 防火墙或者杀毒软件可能拦住了，先关掉试试\n3. 服务器的地址和端口号输对了没？比如有些服务器是 mc.example.com:25565"
+    },
+    "Connection reset": {
+      "solution": "连接被重置了，就是服务器那边把你踢了或者网络断了。\n\n试试：\n1. 重新连接\n2. 检查自己的网络\n3. 服务器可能崩了或者重启了，等一会再连\n4. 开了加速器的话关掉试试，没开的话开一个试试"
+    },
+    "Connection timed out": {
+      "solution": "连接超时了，就是等了半天服务器没理你。\n\n检查：\n1. 服务器地址写对了没？\n2. 服务器有没有开？\n3. 自己的网络正常吗？\n4. 可能需要开加速器"
+    },
+    "Connection lost": {
+      "solution": "连接断开了。\n\n原因可能是：\n1. 你家网不稳定\n2. 服务器重启了\n3. 防火墙切断了连接\n\n重新连一下试试。"
+    },
+    "Connection lost: Transferred 0 bytes": {
+      "solution": "一连接上就掉了，0 字节传输。\n\n通常是：\n1. 服务器把你的 IP ban 了\n2. 服务器白名单没加你\n3. 服务器版本跟你不匹配\n4. 或者服务器根本没开"
+    },
+    "java.net.ConnectException": {
+      "solution": "连不上服务器，网络出了问题。\n\n排查步骤：\n1. 检查你自己的网络能不能上网（打开个网页试试）\n2. 服务器地址对不对？确认一下\n3. 如果是局域网联机，确保两个电脑在同一个 WiFi 下\n4. 开个加速器或者重启一下路由器试试"
+    },
+    "java.net.SocketException": {
+      "solution": "网络通信出错了。\n\n试试：\n1. 重启游戏\n2. 重启路由器\n3. 关了防火墙试试\n4. 换个网络（比如手机热点）看看能不能连"
+    },
+    "javax.net.ssl.SSLException": {
+      "solution": "SSL 加密连接出问题了，比较少见。\n\n可能是系统时间不对！检查一下电脑右下角的日期和时间是不是正确的。\n如果时间没错，那就换个启动器或者重装 Java。"
+    },
+    "io.netty.channel.AbstractChannel": {
+      "solution": "网络底层通信错误，听着很吓人但其实就是连接断了。\n\n试试：\n1. 重新连\n2. 重启游戏\n3. 换加速器节点\n4. 如果服务器是你自己开的，看看端口映射有没有配好"
+    },
+    "io.netty.handler.codec.DecoderException": {
+      "solution": "网络数据解析失败了，连接不稳定或者服务器有问题。\n\n试试重新连接，或者换个时间段再玩。\n如果一直这样，可能是服务器的网络不好。"
+    },
+    "Invalid server address": {
+      "solution": "服务器地址格式不对。\n\n正确格式是：地址:端口号\n比如 mc.example.com:25565\n如果端口是默认的 25565，可以直接写 mc.example.com\n\n别写 http:// 什么的前缀，直接写地址就行。"
+    },
+    "Internal Exception": {
+      "solution": "网络内部异常，服务器那边出问题了。\n\n不是你的问题，试着重连一下，或者等服务器修好了再上。"
+    },
+    "Read timed out": {
+      "solution": "读取超时，网络太慢或者服务器太卡了。\n\n试试：\n1. 检查网络连接\n2. 开个加速器\n3. 等一会再连"
+    }
+  },
+  "模组问题": {
+    "Failed to load mod": {
+      "solution": "有个模组加载失败了，可能是文件坏了或者版本不对。\n\n试试：\n1. 看看报错里说的哪个模组，去重新下载一次\n2. 确认这个模组跟你的 Minecraft 版本一样（比如 1.20.1 的模组不能用在 1.20 上）\n3. 有些模组需要先装另一个模组才能用（叫前置模组），看看作者页面写了需要啥"
+    },
+    "java.lang.ClassNotFoundException": {
+      "solution": "游戏找不到某个类（可以理解成缺了某个零件）。\n\n最常见的原因：\n1. 缺了前置模组！去报错里提到的模组页面看看需要装什么前置\n2. 模组文件损坏了，重新下载\n3. 模组版本不对，下载对应 MC 版本的\n\n比如报错说找不到 net.fabricmc.api.EnvType，那就是缺 Fabric API。"
+    },
+    "java.lang.NoSuchMethodError": {
+      "solution": "某个模组想调用一个不存在的方法，说明模组版本不匹配。\n\n解决方法：\n- 把报错里提到的模组去更新到最新版\n- 如果更新了还不行，可能这个模组跟其他模组不兼容，考虑换一个类似的模组"
+    },
+    "java.lang.NoSuchFieldError": {
+      "solution": "模组想找一个变量（字段）但找不到，版本不匹配。\n\n把相关的模组都更新到最新版试试。"
+    },
+    "java.lang.ClassCastException": {
+      "solution": "类型转换出错，可以理解成「把苹果当成了橘子」。\n\n通常是模组冲突或者版本不匹配，试试：\n1. 禁用最近装的模组\n2. 更新所有模组到最新版"
+    },
+    "java.lang.ArrayStoreException": {
+      "solution": "数组存东西时类型不对，通常是模组版本不匹配。\n\n把所有模组更新到兼容的版本就行了。"
+    },
+    "java.lang.AbstractMethodError": {
+      "solution": "模组想调用一个抽象方法但没实现，说明模组版本太旧或者不兼容。\n\n更新报错里提到的模组就行了。"
+    },
+    "java.lang.TypeNotPresentException": {
+      "solution": "找不到某个类型，通常也是缺前置模组。\n\n检查一下报错里提到的东西是不是某个模组里的，去装那个模组。"
+    },
+    "java.lang.RuntimeException": {
+      "solution": "游戏运行时报错了，就像程序突然「抽风」一样。\n\n最常见的两个原因：\n1. 模组之间吵架了（冲突），把最近装的模组删掉试试\n2. 模组版本不匹配，去更新一下\n\n实在不行就把所有模组移出来，一个一个装回去试，虽然麻烦但最管用。"
+    },
+    "java.lang.RuntimeException: Unable to register event": {
+      "solution": "模组注册事件时失败了。\n\n更新报错里提到的模组到最新版，或者删掉它。"
+    },
+    "Mixin config does not specify minVersion": {
+      "solution": "某个模组的 Mixin 配置没写最低版本要求，说明这个模组可能太老了。\n\n更新报错里提到的模组到最新版。如果作者不更新了，就换一个类似的模组。"
+    },
+    "Potentially dangerous alternative prefix": {
+      "solution": "有人用了一个看起来不太对劲的模组 ID。\n\n如果你确定自己没装奇怪的模组，这条警告可以忽略。\n但如果你最近从不知名网站下了模组，建议删掉。"
+    },
+    "OptiFine": {
+      "solution": "你装了 OptiFine 对吧？这玩意儿虽然能优化性能和加光影，但也经常跟模组打架。\n\n试试：\n1. 删掉 OptiFine，换用 Embeddium（钠） + Oculus（光影前置）的组合\n2. 实在要用 OptiFine，把它和所有模组都更新到最新版\n3. 装 OptiFine 的时候别装太多其他优化模组，容易冲突\n\n记住：OptiFine 跟很多模组都不兼容，特别是跟渲染有关的。"
+    },
+    "Skipping event": {
+      "solution": "游戏跳过了某个事件。\n\n可以忽略这个警告，不影响游戏。但如果后面跟着错误，就跟那个错误有关。"
+    }
+  },
+  "Java/环境": {
+    "Could not create the Java Virtual Machine": {
+      "solution": "Java 启动不了，就像汽车发动不起来一样。\n\n检查这几样：\n1. 你装 Java 了吗？MC 1.17 以上的版本需要 Java 17 或 21\n2. 如果是 64 位的 Windows，要装 64 位的 Java，32 位的不行\n3. 去 PCL 启动器的设置里看看 Java 路径是不是对的\n\n不会装 Java？百度搜「Java 17 下载」，第一个结果下载安装就行。"
+    },
+    "java.lang.UnsupportedClassVersionError": {
+      "solution": "Java 版本不对，就像插头不匹配插座一样。\n\n怎么做：\n- 如果你玩的是 1.17 以上的 MC，需要 Java 17 或 21\n- 如果你玩的是 1.12 以下的 MC，需要 Java 8\n- 去 PCL 启动器设置里换个 Java 版本试试"
+    },
+    "Could not find or load main class": {
+      "solution": "找不到 Minecraft 的主类了，通常是游戏文件损坏。\n\n解决方法：\n1. 在 PCL 里点「修复」或者重新安装这个版本\n2. 如果还不行，把整个版本文件夹删了重新装一遍\n3. 检查 Java 安装是否正常"
+    },
+    "Unsupported class file major version": {
+      "solution": "Java 版本太老了，不支持这个版本的 class 文件。\n\n升级 Java！比如把 Java 8 换成 Java 17 或 21。\n去 PCL 设置里换个新版本的 Java。"
+    },
+    "java.lang.UnsatisfiedLinkError": {
+      "solution": "缺少某个系统文件（.dll 文件）。\n\n解决方案：\n1. 确保你下载的是对应系统的版本（Windows 版不要下成 Mac 版）\n2. 重新安装 Java\n3. 安装 Visual C++ 运行库（百度搜一下就有）"
+    }
+  },
+  "存档/世界": {
+    "Failed to load world": {
+      "solution": "世界加载失败了，进不去存档。\n\n试试：\n1. 恢复备份\n2. 用 MCA Selector 修复或者删掉损坏的区块\n3. 看看是不是模组改了世界生成，禁用最近装的模组试试\n4. 如果都不行，开新档吧..."
+    },
+    "Failed to load chunk": {
+      "solution": "区块加载失败了。\n\n可能是：\n1. 硬盘空间不够了\n2. 区块数据损坏了\n3. 模组改了世界生成导致加载不了\n\n试试恢复备份，或者用 MCA Selector 删掉出问题的区块（让它重新生成）。"
+    },
+    "Chunk file is not a valid region file": {
+      "solution": "区块文件（.mca）损坏了，就像书页被撕烂了一样。\n\n解决办法：\n1. 用 MCA Selector 打开存档，找到损坏的区块\n2. 删掉那个区块（游戏会重新生成）\n3. 或者直接恢复备份\n\n以后记得定期备份存档！"
+    },
+    "Saving chunks failed": {
+      "solution": "区块保存失败了，这是个危险信号！\n\n立刻检查：\n1. 硬盘空间是不是满了\n2. 存档文件夹是不是设了只读\n3. 硬盘有没有坏道\n\n赶紧备份存档，不然可能白玩了。"
+    },
+    "Saving world failed": {
+      "solution": "存档保存失败了！\n\n立刻检查：\n1. 硬盘空间是不是满了？（C 盘红了赶紧清理）\n2. 存档文件夹是不是被设成只读了\n3. 硬盘是不是坏了（听听有没有奇怪的声音）\n\n建议立刻备份存档！"
+    },
+    "Invalid world": {
+      "solution": "世界存档坏了，进不去了。\n\n别急：\n1. 如果你有备份，把备份恢复进去\n2. 如果没有备份，可以用 MCEdit 或者 NBTExplorer 修复\n3. 实在不行只能开新档了，以后记得定期备份存档！"
+    },
+    "Missing dimensions": {
+      "solution": "游戏找不到某个维度（比如地狱、末地）。\n\n一般是存档坏了或者模组冲突。\n试试恢复备份的存档，或者禁用最近装的模组。"
+    },
+    "Couldn't load tag": {
+      "solution": "标签文件加载失败，一般是模组之间打架了。\n\n把所有模组都更新到最新版试试。"
+    },
+    "Tried to load a world with an incompatible format": {
+      "solution": "存档格式不兼容。\n\n比如你用 1.20.1 开了个档，然后降级到 1.19 去玩，就会这样。\n高级版本降级到低级版本是不行的。\n\n解决办法：换回原来的版本，或者开新档。"
+    },
+    "Already decorating": {
+      "solution": "区块装饰（生成植物、矿物之类的）的时候出了问题。\n\n通常是模组冲突导致的，禁用最近加的地形/世界生成模组试试。"
+    },
+    "Not enough space from neighbors": {
+      "solution": "区块生成时空间不够，常见于大型模组包。\n\n解决方法：\n1. 更新所有跟世界生成有关的模组\n2. 删掉一些地形生成模组\n3. 或者直接删掉出问题的区块让它重新生成"
+    }
+  },
+  "显卡/渲染": {
+    "GLFW error": {
+      "solution": "显卡驱动出了问题，就像电视没信号一样。\n\n试试：\n1. 更新显卡驱动：NVIDIA 就去官网下最新驱动，AMD 也一样\n2. 如果你的电脑比较老，可能显卡不支持 MC 需要的 OpenGL 3.2\n3. 还是不行的话，在 PCL 启动参数里加一行：-Dorg.lwjgl.opengl.Display.enableHighDPI=false"
+    },
+    "org.lwjgl.opengl.OpenGLException": {
+      "solution": "OpenGL 出错了，跟显卡有关。\n\n试试：\n1. 更新显卡驱动\n2. 检查你的显卡是不是太老了（MC 需要 OpenGL 3.2+）\n3. 在 PCL 启动参数里加一行：-Dorg.lwjgl.opengl.Display.allowSoftwareOpenGL=true"
+    },
+    "EXCEPTION_ACCESS_VIOLATION": {
+      "solution": "游戏访问了不该访问的内存地址，比较棘手。\n\n解决方法：\n1. 更新显卡驱动到最新版\n2. 在 PCL 启动参数里加一行：-Dsun.java2d.d3d=false\n3. 如果还不行，换个 Java 版本试试（Java 17 换 Java 21，或者反过来）"
+    },
+    "Pixel format not accelerated": {
+      "solution": "你的显卡不支持加速像素格式，说白了就是显卡太老或者驱动没装好。\n\n试试：\n1. 更新显卡驱动\n2. 如果你有两张显卡（比如笔记本），确保游戏在用独立显卡跑\n3. 在 PCL 启动参数里加：-Dorg.lwjgl.opengl.Display.allowSoftwareOpenGL=true"
+    },
+    "Failed to create display": {
+      "solution": "游戏窗口创建失败了。\n\n检查：\n1. 显卡驱动是不是最新的\n2. 你的显示器有没有正常连接\n3. 把 PCL 的视频设置文件删了（用管理员身份运行）\n4. 如果用了光影，先禁用光影"
+    },
+    "Already tesselating": {
+      "solution": "渲染 tessellation 出错了，听起来很专业但其实就是显卡/渲染问题。\n\n试试：\n1. 更新显卡驱动\n2. 关掉光影\n3. 删掉 OptiFine 或者更新它"
+    },
+    "Shader compilation error": {
+      "solution": "光影包编译出错，就是光影跟你电脑不兼容。\n\n试试：\n1. 换个光影包版本\n2. 更新光影包到最新版\n3. 换一个光影包试试"
+    },
+    "Texture not found": {
+      "solution": "找不到纹理（贴图），资源包有问题。\n\n重新下载资源包或者换一个资源包试试。"
+    },
+    "Render thread": {
+      "solution": "渲染线程报错了，就是画面显示出了问题。\n\n常见原因：\n1. 显卡驱动太旧 → 更新\n2. 光影包不兼容 → 删掉或换一个\n3. OptiFine 冲突 → 删掉 OptiFine\n4. 贴图太大 → 降低资源包分辨率"
+    }
+  },
+  "实体/方块": {
+    "Ticking entity": {
+      "solution": "游戏在更新某个实体（比如动物、怪物、掉落物）的时候卡死了。\n\n解决方法：\n1. 如果进得去游戏，输入 /kill @e 清除所有实体（注意会清掉你的动物和物品）\n2. 如果进不去，去服务器文件或者单机存档的 data 文件夹里找找有没有损坏的实体数据\n3. 看看报错里提到了哪个模组，更新或删除它\n4. 有时候是某个矿车或者物品展示框卡了，把附近的拆掉"
+    },
+    "Ticking block entity": {
+      "solution": "游戏在更新某个方块实体（比如箱子、熔炉、漏斗）的时候崩了。\n\n怎么办：\n1. 先记住崩溃报告里说的坐标（比如 Tile Entity at -123, 64, 456）\n2. 用 NBTExplorer 或者 MCA Selector 打开存档，找到那个坐标\n3. 删掉那个出问题的方块\n4. 实在找不到坐标，就恢复备份或者开新档\n\n预防：不要用太多漏斗链和箱子，特别是模组里的特殊容器。"
+    },
+    "Block entity threw exception at tick": {
+      "solution": "方块实体更新时抛出了异常。\n\n日志里通常会标明是哪个方块、在哪个坐标。看看坐标附近有什么特殊方块（比如模组里的机器），拆掉它。\n\n如果不知道坐标，用 MCA Selector 打开存档看看有没有损坏的区块。"
+    },
+    "Entity threw exception at tick": {
+      "solution": "实体更新时出了异常。\n\n试试 /kill @e[type=!player] 杀掉所有非玩家实体。\n如果进不去游戏，去存档的 entities 文件夹里看看有没有损坏的数据。"
+    },
+    "IllegalStateException: Block entity is already invalid": {
+      "solution": "方块实体已经失效了。\n\n一般是某个容器的数据出了问题。\n找到报错坐标附近的箱子/熔炉/模组机器，拆掉它重建。"
+    },
+    "Unable to resolve BlockEntity": {
+      "solution": "无法识别方块实体。\n\n说明某个方块的数据里记录了一个已经不存在的模组的方块。\n如果你卸载了某个模组但没有删掉它的方块，就会这样。\n把那个方块拆掉就好了。"
+    },
+    "java.lang.IllegalStateException": {
+      "solution": "游戏在不该做某件事的时候做了那件事。\n\n通常是模组的问题，把出问题的模组更新一下或者删了试试。"
+    }
+  },
+  "并发/冲突": {
+    "java.util.ConcurrentModificationException": {
+      "solution": "游戏同时做了两件事导致冲突了，就像你左手画圆右手画方同时做。\n\n简单点说就是模组之间打架了，试试：\n1. 把所有模组更新到最新版\n2. 看看是不是实体太多了（比如养了几百只动物），用 /kill @e 清一下\n3. 把最近装的模组删掉\n4. 装个优化模组比如 FerriteCore 或 Canary"
+    },
+    "java.util.ConcurrentModificationException: null": {
+      "solution": "还是并发修改的问题。\n\n试试：\n1. 装 FerriteCore 或 Canary 这种优化模组\n2. 更新 Java 到最新版\n3. 在服务器设置里减少视距和实体数量"
+    },
+    "net.minecraft.util.ConcurrentModificationException": {
+      "solution": "Minecraft 自己检测到了并发修改。\n\n试试：\n1. 更新模组和 MC 版本\n2. 禁用最近装的模组\n3. 如果你是服务器，去 server.properties 里把实体范围调小一点"
+    },
+    "ConcurrentModificationException": {
+      "solution": "还是这个并发修改的问题。\n\n解决办法：\n1. 更新模组\n2. 移除有问题的模组\n3. 减少游戏里的实体数量"
+    },
+    "Caused by: java.util.ConcurrentModificationException": {
+      "solution": "游戏因为多线程冲突崩了。\n\n最常见的情况是实体太多了或者模组冲突。\n试试：\n1. 更新 Forge/Fabric 和所有模组\n2. 看看日志里是哪个模组引起的，删掉它\n3. 装个优化模组比如 EntityCulling\n4. 用 /kill 清理多余的实体"
+    },
+    "CME": {
+      "solution": "就是上面那个 ConcurrentModificationException，一样的毛病。\n\n解决方法：\n1. 更新模组\n2. 减少实体数量（少养动物、少放展示框）\n3. 装个优化模组"
+    },
+    "java.util.concurrent.ExecutionException": {
+      "solution": "游戏做某件事的时候出错了（比如加载世界、加载模组）。\n\n解决方法：\n1. 看看错误信息前面的内容，那里通常会写真正的错误原因\n2. 把最近装的模组删掉试试\n3. 如果进不去世界，试试备份存档然后删了重进"
+    },
+    "java.lang.StackOverflowError": {
+      "solution": "游戏「栈溢出」了，就是递归调用太多层，就像俄罗斯套娃套太多层一样。\n\n常见于：\n1. 模组冲突 → 把最近装的模组删掉\n2. 红石机械太复杂 → 把红石机器拆了或者用拉杆关掉\n3. 数据包出了问题 → 移除最近加的数据包"
+    }
+  },
+  "登录/验证": {
+    "Failed to login": {
+      "solution": "登录失败了。\n\n检查：\n1. 账号密码对不对\n2. 微软的服务器有没有挂（可以去官网看看）\n3. 开个加速器试试"
+    },
+    "Failed to login: Invalid session": {
+      "solution": "登录失败，会话失效了。\n\n试试：\n1. 退出启动器重新登录\n2. 微软账号的话去浏览器重新登录一下\n3. 重启启动器\n4. 如果是正版验证服务器抽风，等一会再试"
+    },
+    "Failed to check session": {
+      "solution": "会话验证失败，就是 MC 检查你是不是正版用户时出了问题。\n\n检查：\n1. 网络通不通？能上网吗？\n2. 微软账号登录状态是不是正常的\n3. 如果是离线模式，去启动器里开一下离线登录"
+    },
+    "java.lang.SecurityException": {
+      "solution": "安全原因被拦住了。\n\n可能的原因：\n1. 你装的模组被修改过（签名不对），去原作者页面下载\n2. 文件权限问题，用管理员身份运行 PCL 试试"
+    }
+  },
+  "启动/崩溃": {
+    "Exit Code -1": {
+      "solution": "游戏崩了但没给具体原因。\n\n别慌，去看看 crash-reports 文件夹或者 logs/latest.log 文件，\n里面通常会有详细的错误信息，再根据具体内容来找解决方法。"
+    },
+    "Exit Code 1": {
+      "solution": "退出代码 1，一般是 Java 启动不了或者参数写错了。\n\n检查：\n1. Java 装了没有？去 PCL 设置里看看 Java 路径\n2. 启动参数有没有写错的？比如 -Xmx 拼成 -Xms 了"
+    },
+    "Exit Code -1073740791": {
+      "solution": "退出代码 -1073740791，跟显卡驱动或 Java 有关。\n\n试试：\n1. 更新显卡驱动\n2. 换个 Java 版本（比如从 Java 17 换成 Java 21）"
+    },
+    "java.lang.ExceptionInInitializerError": {
+      "solution": "模组在初始化（刚启动）时就炸了。\n\n检查：\n1. 这个模组是否支持你的 Minecraft 版本？\n2. 是不是缺了前置模组？\n3. 把这个模组删了换一个版本"
+    },
+    "java.lang.VerifyError": {
+      "solution": "类验证失败，通常是模组被修改过或者版本不兼容。\n\n试试：\n1. 从官方来源重新下载模组（别去奇怪的网站下）\n2. 更新模组到最新版\n3. 如果用了 OptiFine，先删掉它试试（OptiFine 经常跟别的模组打架）"
+    },
+    "Server thread": {
+      "solution": "服务端线程报错了，服务器端出了问题。\n\n如果你是联机遇到这个问题：不是你的事，让服主去修。\n如果你是开服的：看看日志前面报的具体错误。"
+    }
+  },
+  "文件/IO": {
+    "java.io.IOException": {
+      "solution": "游戏读写文件时出了问题。\n\n检查：\n1. 硬盘空间还够不够？（C 盘红了也会这样）\n2. 是不是把 MC 文件夹设置了只读？右键属性里看看\n3. 资源包或者光影包可能坏了，换一个试试"
+    },
+    "java.io.EOFException": {
+      "solution": "文件读到一半突然没了。\n\n说明某个文件损坏了或者没下载完整。\n找到报错里提到的文件，重新下载。"
+    },
+    "com.google.gson.JsonSyntaxException": {
+      "solution": "JSON 文件格式错了。\n\n通常是某个模组的配置文件或者资源包有问题。\n看看报错里提到了哪个文件，把它删了（游戏会自动重建）或者重新下载对应的模组。"
+    },
+    "java.util.zip.ZipException": {
+      "solution": "压缩文件出错了。\n\n某个模组或者资源包的 zip/jar 文件可能损坏了。\n想想最近下载了哪个模组/资源包，重新下载一次。"
+    },
+    "java.lang.NumberFormatException": {
+      "solution": "游戏想把文字转成数字但失败了。\n\n通常是配置文件或者存档数据坏了。\n试试：\n1. 把 config 文件夹里对应的配置文件删了（游戏会自动重建）\n2. 存档有问题的话，恢复备份"
+    },
+    "java.lang.IllegalArgumentException": {
+      "solution": "某个参数不对，一般是配置或者数据有问题。\n\n试试：\n1. 检查模组的配置文件（在 config 文件夹里），看看有没有改错\n2. 把有问题的模组重新装一遍\n3. 如果存档坏了，恢复备份"
+    },
+    "java.lang.ArrayIndexOutOfBoundsException": {
+      "solution": "游戏想拿数组里不存在的东西，一般是模组有 bug。\n\n试试：\n1. 更新出问题的那个模组\n2. 如果是存档问题，试试用工具修复或者恢复备份"
+    }
+  },
+  "其他": {
+    "java.lang.NullPointerException": {
+      "solution": "游戏遇到了一个「空指针」错误，听起来很吓人，其实就是某个模组找不到它想要的东西了。\n\n怎么办，一步步来：\n1. 先把最近新装的模组删掉，试试能不能进游戏\n2. 如果能进了，那就是新模组的问题，换一个版本或者别用了\n3. 如果还不行，把所有模组先移出来（不要删，放别处），然后一个一个放回去试\n4. 看看是不是缺了「前置模组」，比如装了一个模组还需要装另一个才能用"
+    },
+    "java.lang.IllegalAccessError": {
+      "solution": "模组想访问它没权限访问的东西。\n\n试试：\n1. 把相关的模组更新到最新版\n2. 如果更新后还不行，装旧一点的版本试试"
+    },
+    "SoundSystem error": {
+      "solution": "音频系统出问题了。\n\n试试：\n1. 更新声卡驱动\n2. 在 PCL 启动参数里加一行：-Djava.system.class.loader=org.lwjgl.openal.AL\n3. 如果还不行，把音量调成 0 凑合玩（不推荐）"
+    },
+    "java.lang.IllegalStateException: Function is not supported": {
+      "solution": "某个功能不被支持。\n\n通常是模组版本太老或者太新，跟游戏版本不匹配。\n更新相关模组到兼容的版本。"
+    },
+    "Failed to load": {
+      "solution": "看起来你的整合包加载时出了不少问题，有些模组装不上或者互相打架了。别急，我们一步一步来。\n\n【首先做这些】\n1. 把 ModernFix 更新到最新版（它自己好像跟别的模组打架了）\n2. 检查是不是缺了这些前置模组：lithium、additionalplacements、doubleslabs\n3. 看你好像用了 Sinytra Connector（在 Forge 上装 Fabric 模组的工具），这东西兼容性不太好，尽量别用 Fabric 模组\n\n【如果还不行】\n1. 删掉最近装的模组，特别是跟小地图、光影相关的\n2. 去 crash-reports 文件夹看看有没有崩溃报告，那个比日志更准确\n3. 还是不行的话，重新装一遍整合包吧\n\n【以后注意】\n1. 装模组前看看是不是支持你的 MC 版本\n2. 定期备份存档和 mods 文件夹\n3. 别一次装太多模组，装一个试一个"
+    },
+    "Failed to check session": {
+      "solution": "会话验证失败，就是 MC 检查你是不是正版用户时出了问题。\n\n检查：\n1. 网络通不通？能上网吗？\n2. 微软账号登录状态是不是正常的\n3. 如果是离线模式，去启动器里开一下离线登录"
+    },
+    "NoClassDefFoundError": {
+      "solution": "游戏找不到某个类（可以理解成缺少了某个零件）。\n\n大概率是：\n- 某个模组文件坏了，重新下载那个模组\n- 或者缺少了前置模组，去模组作者页面看看需要装啥前置\n\n如果不知道是哪个模组的问题，把所有模组移出来，一个一个放回去试。"
+    }
+  }
+}
