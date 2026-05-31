@@ -200,6 +200,8 @@ class Handlers:
                 yield event.plain_result("压缩包中未找到可分析的日志文件。")
                 shutil.rmtree(edir, ignore_errors=True)
                 return
+            if zpath.exists():
+                zpath.unlink()
         except zipfile.BadZipFile:
             yield event.plain_result("压缩包损坏，无法解压。")
             return
