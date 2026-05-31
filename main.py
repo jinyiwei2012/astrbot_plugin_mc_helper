@@ -460,8 +460,45 @@ class McHelperPlugin(Star):
                             shutil.rmtree(extract_dir, ignore_errors=True)
                             return
                         if ext in (".bat", ".cmd", ".ps1"):
-                            name_lower = Path(filename).stem.lower()
-                            if not any(kw in name_lower for kw in ("启动脚本", "startup", "启动", "start")):
+                            try:
+                                raw = zf.read(info)
+                                content = raw.decode("utf-8", errors="replace")
+                            except Exception:
+                                content = ""
+                            mc_keywords = ("java", "javaw", "minecraft", "minecraft.exe")
+                            has_mc = any(kw in content.lower() for kw in mc_keywords)
+                            dangerous = (
+                                "powershell",
+                                "curl",
+                                "wget",
+                                "certutil",
+                                "bitsadmin",
+                                "vssadmin",
+                                "format",
+                                "del ",
+                                "rmdir ",
+                                "rd ",
+                                "net use",
+                                "net user",
+                                "net localgroup",
+                                "icacls",
+                                "takeown",
+                                "cacls",
+                                "attrib",
+                                "reg ",
+                                "regedit",
+                                "mshta",
+                                "rundll32",
+                                "wmic",
+                                "cscript",
+                                "msiexec",
+                                "schtasks",
+                                "taskkill",
+                                "chmod",
+                                "chown",
+                            )
+                            has_danger = any(kw in content.lower() for kw in dangerous)
+                            if not has_mc or has_danger:
                                 yield event.plain_result(f"压缩包包含不安全的脚本文件（{filename}），已拒绝解压。")
                                 shutil.rmtree(extract_dir, ignore_errors=True)
                                 return
