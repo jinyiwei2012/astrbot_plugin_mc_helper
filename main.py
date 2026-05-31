@@ -416,29 +416,38 @@ class McHelperPlugin(Star):
                 with zipfile.ZipFile(zip_path, "r") as zf:
                     infos = zf.infolist()
                     if len(infos) > 1000:
-                        yield event.plain_result("压缩包内文件过多（超过 1000 个），已拒绝解压。")
+                        yield event.plain_result("压缩包内文件过多，已拒绝解压。")
                         shutil.rmtree(extract_dir, ignore_errors=True)
                         return
-                    max_extract_size = 50 * 1024 * 1024
-                    max_file_size = 10 * 1024 * 1024
-                    total_size = 0
-                    extracted = 0
+
+                    blacklist_exts = {
+                        ".exe",
+                        ".com",
+                        ".msi",
+                        ".scr",
+                        ".sh",
+                        ".bin",
+                        ".dll",
+                        ".so",
+                        ".dylib",
+                        ".vbs",
+                        ".js",
+                        ".bat",
+                        ".cmd",
+                        ".ps1",
+                        ".jar",
+                    }
+                    blacklist_names = []
                     for info in infos:
                         if info.is_dir():
                             continue
-                        filename = info.filename
-                        if (
-                            filename.startswith("/")
-                            or "/../" in filename
-                            or filename == ".."
-                            or filename.startswith("../")
-                        ):
-                            yield event.plain_result("压缩包包含无效的路径，已拒绝解压。")
-                            shutil.rmtree(extract_dir, ignore_errors=True)
-                            return
-                        ext = Path(filename).suffix.lower()
-                        if ext in (".log", ".txt"):
-                            pass
+                        fn = info.filename
+                        if fn.startswith("/") or "/../" in fn or fn == ".." or fn.startswith("../"):
+                            blacklist_names.append(fn)
+                            continue
+                        ext = Path(fn).suffix.lower()
+                        if ext in blacklist_exts:
+                            blacklist_names.append(fn)
                         elif ext == ".json":
                             try:
                                 raw = zf.read(info)
@@ -459,8 +468,23 @@ class McHelperPlugin(Star):
                                 "schtasks",
                             )
                             if any(kw in content.lower() for kw in dangerous):
-                                continue
-                        else:
+                                blacklist_names.append(fn)
+                    if blacklist_names:
+                        logger.warning(f"压缩包包含黑名单文件: {blacklist_names}")
+                        yield event.plain_result("压缩包包含不允许的文件类型，已拒绝处理。")
+                        shutil.rmtree(extract_dir, ignore_errors=True)
+                        return
+
+                    max_file_size = 10 * 1024 * 1024
+                    max_extract_size = 50 * 1024 * 1024
+                    total_size = 0
+                    extracted = 0
+                    for info in infos:
+                        if info.is_dir():
+                            continue
+                        filename = info.filename
+                        ext = Path(filename).suffix.lower()
+                        if ext not in (".log", ".txt", ".json"):
                             continue
                         if info.file_size > max_file_size:
                             yield event.plain_result(f"压缩包内存在文件过大（{filename}），已拒绝解压。")
