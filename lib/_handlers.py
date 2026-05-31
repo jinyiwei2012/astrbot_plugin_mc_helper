@@ -158,17 +158,22 @@ class Handlers:
         if not folder.is_dir():
             yield event.plain_result("暂无历史分析记录。")
             return
-        files = sorted(folder.iterdir(), key=lambda f: f.stat().st_mtime, reverse=True)[:10]
-        if not files:
+        sessions = sorted(
+            [d for d in folder.iterdir() if d.is_dir()],
+            key=lambda d: d.stat().st_mtime,
+            reverse=True,
+        )[:10]
+        if not sessions:
             yield event.plain_result("暂无历史分析记录。")
             return
         result = "**📋 最近的分析报告**\n\n"
-        for f in files:
-            ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(f.stat().st_mtime))
-            size = f.stat().st_size
-            label = f.stem[:40]
-            result += f"- `{label}` ({size}KB, {ts})\n"
-        result += "\n报告保存在 `data/错误报告/<用户>/` 目录下，超期自动清理。"
+        for s in sessions:
+            ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(s.stat().st_mtime))
+            log_count = len(list((s / "原始log").glob("*"))) if (s / "原始log").is_dir() else 0
+            has_analysis = (s / "分析结果.md").is_file()
+            flag = "✅" if has_analysis else ""
+            result += f"- `{s.name}` {flag} ({log_count} 文件, {ts})\n"
+        result += "\n报告保存在 `data/错误报告/<用户>/<时间>/` 目录下，超期自动清理。"
         async for r in self._send_img(event, result):
             yield r
 
@@ -282,26 +287,30 @@ class Handlers:
             async for r in self._send_img(event, f"**🤖 AI 分析结果**\n\n{result}"):
                 yield r
 
-        self._save_report(uid, edir)
+        self._save_report(uid, edir, result)
         shutil.rmtree(edir, ignore_errors=True)
 
     # ── report persistence ──
 
-    def _save_report(self, uid: str, extract_dir: Path):
+    def _save_report(self, uid: str, extract_dir: Path, analysis: str):
         ts = time.strftime("%Y%m%d_%H%M%S")
-        dst = self.p.reports_path / uid
+        dst = self.p.reports_path / uid / ts
         dst.mkdir(parents=True, exist_ok=True)
+
+        log_dir = dst / "原始log"
+        log_dir.mkdir(parents=True, exist_ok=True)
         for f in extract_dir.rglob("*"):
             if f.is_file() and f.suffix in (".log", ".txt", ".json"):
                 try:
                     c = f.read_text(encoding="utf-8", errors="ignore")
                     if not c.strip():
                         continue
-                    stem = f.stem[:40]
-                    new_name = f"{stem}_{ts}{f.suffix}"
-                    (dst / new_name).write_text(c, encoding="utf-8")
+                    (log_dir / f.name).write_text(c, encoding="utf-8")
                 except Exception as e:
-                    logger.debug(f"保存报告文件失败: {e}")
+                    logger.debug(f"保存日志失败: {e}")
+
+        (dst / "分析结果.md").write_text(analysis, encoding="utf-8")
+
         self._cleanup_old_reports(uid)
 
     def _cleanup_old_reports(self, uid: str):
@@ -311,8 +320,9 @@ class Handlers:
                 return
             days = self._cfg("max_report_age_days", 7)
             cutoff = time.time() - days * 86400
-            for f in folder.iterdir():
-                if f.is_file() and f.stat().st_mtime < cutoff:
-                    f.unlink(missing_ok=True)
+            for d in folder.iterdir():
+                if d.is_dir() and d.stat().st_mtime < cutoff:
+                    shutil.rmtree(d, ignore_errors=True)
+                    logger.info(f"清理过期报告: {d.name}")
         except Exception as e:
             logger.debug(f"清理旧报告失败: {e}")
