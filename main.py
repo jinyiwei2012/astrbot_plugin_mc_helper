@@ -1,20 +1,18 @@
-import re
+import asyncio
 import json
+import re
+import shutil
 import time
 import zipfile
-import shutil
-import threading
 from pathlib import Path
 from typing import Optional
 
 import aiohttp
 
+from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api.star import Context, Star
-from astrbot.api import logger
 from astrbot.api.message_components import File, Reply
-from astrbot.api import AstrBotConfig
-from astrbot.core.utils.astrbot_path import get_astrbot_data_path
+from astrbot.api.star import Context, Star, StarTools
 
 
 class McHelperPlugin(Star):
@@ -22,11 +20,9 @@ class McHelperPlugin(Star):
         super().__init__(context)
         self.config = config
 
-        self.plugin_data_path = (
-            Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_mc_helper"
-        )
+        self.plugin_data_path = StarTools.get_data_dir("astrbot_plugin_mc_helper")
         self.plugin_data_path.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
 
         solutions_src = Path(__file__).parent / "data" / "solutions.json"
         self.solutions_db_path = self.plugin_data_path / "solutions.json"
@@ -73,9 +69,7 @@ class McHelperPlugin(Star):
         return {"mod_groups": []}
 
     def _check_duplicate_mods(self, error_text: str) -> str | None:
-        jar_pattern = re.compile(
-            r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", re.IGNORECASE
-        )
+        jar_pattern = re.compile(r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", re.IGNORECASE)
         found_jars = jar_pattern.findall(error_text)
         filepath_pattern = re.compile(
             r"[\w\\/.\-+]*mods[\\/]([\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar)",
@@ -114,16 +108,10 @@ class McHelperPlugin(Star):
                         matched_paths.append(p)
                         break
 
-            found_by_name = [
-                name
-                for name in ([current] + aliases)
-                if name.lower() in error_text.lower()
-            ]
+            found_by_name = [name for name in ([current] + aliases) if name.lower() in error_text.lower()]
 
             if len(set(matched_jars)) >= 2 or len(set(matched_paths)) >= 2:
-                result = (
-                    f"**⚠️ 检测到同一类模组出现多个：{', '.join(found_by_name)}**\n\n"
-                )
+                result = f"**⚠️ 检测到同一类模组出现多个：{', '.join(found_by_name)}**\n\n"
                 result += f"{group.get('note', '')}\n"
                 if matched_paths:
                     result += "\n**检测到的冲突文件：**\n"
@@ -178,8 +166,8 @@ class McHelperPlugin(Star):
                 count += 1
         return count
 
-    def _set_solution(self, key: str, solution: str, category: str = "AI生成"):
-        with self._lock:
+    async def _set_solution(self, key: str, solution: str, category: str = "AI生成"):
+        async with self._lock:
             old_db = json.loads(json.dumps(self.solutions_db))
             try:
                 if category not in self.solutions_db:
@@ -265,9 +253,7 @@ class McHelperPlugin(Star):
             session_id = event.unified_msg_origin
             file_comp = self._recent_files.get(session_id)
             if file_comp:
-                yield event.plain_result(
-                    "未检测到引用的文件，自动使用最近上传的文件..."
-                )
+                yield event.plain_result("未检测到引用的文件，自动使用最近上传的文件...")
 
         if file_comp:
             async for result in self._handle_error_report(event, file_comp):
@@ -275,9 +261,7 @@ class McHelperPlugin(Star):
             return
 
         if not error_text or error_text.strip() == "":
-            yield event.plain_result(
-                "用法：/mc_check <错误信息>\n直接发送错误报告压缩包即可自动分析。"
-            )
+            yield event.plain_result("用法：/mc_check <错误信息>\n直接发送错误报告压缩包即可自动分析。")
             return
 
         ai_result = await self._ask_ai_with_context(event, error_text)
@@ -288,19 +272,13 @@ class McHelperPlugin(Star):
             "AI 未能生成有效的解决方案",
             "AI 分析调用失败",
         )
-        ai_failed = (
-            not ai_result
-            or ai_result.strip() == ""
-            or ai_result.startswith(fail_prefixes)
-        )
+        ai_failed = not ai_result or ai_result.strip() == "" or ai_result.startswith(fail_prefixes)
 
         if ai_failed:
             solution = self._search_local_solutions(error_text)
             if solution:
                 dup_warning = self._check_duplicate_mods(error_text)
-                result = self._enrich_solution(
-                    f"**📖 本地匹配到解决方案**\n\n{solution}", error_text
-                )
+                result = self._enrich_solution(f"**📖 本地匹配到解决方案**\n\n{solution}", error_text)
                 if dup_warning:
                     result = f"{dup_warning}\n\n{result}"
                 async for r in self._send_md_image(event, result):
@@ -318,29 +296,25 @@ class McHelperPlugin(Star):
         error_key = self._extract_error_key(error_text)
         save_cat = self._cfg("auto_save_category", "AI生成")
         if error_key and not self._get_solution(error_key):
-            self._set_solution(error_key, ai_result, category=save_cat)
+            await self._set_solution(error_key, ai_result, category=save_cat)
             async for r in self._send_md_image(
                 event,
                 f"**🤖 AI 分析结果**\n\n{result_text}\n\n*（已自动保存到本地知识库）*",
             ):
                 yield r
         else:
-            async for r in self._send_md_image(
-                event, f"**🤖 AI 分析结果**\n\n{result_text}"
-            ):
+            async for r in self._send_md_image(event, f"**🤖 AI 分析结果**\n\n{result_text}"):
                 yield r
 
     @filter.command("mc_add_solution")
-    async def mc_add_solution(
-        self, event: AstrMessageEvent, error_keyword: str, solution_text: str
-    ):
+    async def mc_add_solution(self, event: AstrMessageEvent, error_keyword: str, solution_text: str):
         if not self._is_allowed_group(event):
             return
         if not error_keyword or not solution_text:
             yield event.plain_result("用法：/mc_add_solution <错误关键词> <解决方案>")
             return
 
-        self._set_solution(error_keyword.strip(), solution_text.strip(), "用户添加")
+        await self._set_solution(error_keyword.strip(), solution_text.strip(), "用户添加")
         yield event.plain_result(f"已添加解决方案：{error_keyword}")
 
     async def _handle_error_report(self, event: AstrMessageEvent, file_comp: File):
@@ -360,9 +334,7 @@ class McHelperPlugin(Star):
 
         try:
             timeout_sec = self._cfg("download_timeout", 120)
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=timeout_sec)
-            ) as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout_sec)) as session:
                 async with session.get(file_url) as resp:
                     if resp.status != 200:
                         yield event.plain_result(f"文件下载失败，HTTP {resp.status}")
@@ -377,9 +349,7 @@ class McHelperPlugin(Star):
                     for info in zf.infolist():
                         target_path = (extract_dir / info.filename).resolve()
                         if not str(target_path).startswith(str(extract_dir.resolve())):
-                            yield event.plain_result(
-                                "压缩包包含无效的路径，已拒绝解压。"
-                            )
+                            yield event.plain_result("压缩包包含无效的路径，已拒绝解压。")
                             shutil.rmtree(extract_dir, ignore_errors=True)
                             return
                         zf.extract(info, extract_dir)
@@ -411,11 +381,7 @@ class McHelperPlugin(Star):
                 "AI 未能生成有效的解决方案",
                 "AI 分析调用失败",
             )
-            ai_failed = (
-                not ai_result
-                or ai_result.strip() == ""
-                or ai_result.startswith(fail_prefixes)
-            )
+            ai_failed = not ai_result or ai_result.strip() == "" or ai_result.startswith(fail_prefixes)
 
             if ai_failed:
                 local_solution = self._search_local_solutions(error_logs)
@@ -442,16 +408,14 @@ class McHelperPlugin(Star):
             error_key = self._extract_error_key(error_logs)
             save_cat = self._cfg("auto_save_category", "AI生成")
             if error_key and not self._get_solution(error_key):
-                self._set_solution(error_key, ai_result, category=save_cat)
+                await self._set_solution(error_key, ai_result, category=save_cat)
                 async for r in self._send_md_image(
                     event,
                     f"**🤖 AI 分析结果**\n\n{result_text}\n\n*（已自动保存到本地知识库）*",
                 ):
                     yield r
             else:
-                async for r in self._send_md_image(
-                    event, f"**🤖 AI 分析结果**\n\n{result_text}"
-                ):
+                async for r in self._send_md_image(event, f"**🤖 AI 分析结果**\n\n{result_text}"):
                     yield r
 
         except Exception as e:
@@ -604,9 +568,7 @@ class McHelperPlugin(Star):
             re.IGNORECASE,
         )
         if dup_section:
-            dup_files = re.findall(
-                r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", dup_section.group(1)
-            )
+            dup_files = re.findall(r"[\w\-+]+(?:mc[\w\-+.]+)?\d[\w.+]*\.jar", dup_section.group(1))
             if dup_files:
                 details.append("重复模组：" + "、".join(set(dup_files[:5])))
 
@@ -628,9 +590,7 @@ class McHelperPlugin(Star):
         )
         if error_keyword:
             ex_type = error_keyword.group(1).split(".")[-1]
-            ex_msg = (
-                error_keyword.group(2).strip()[:80] if error_keyword.group(2) else ""
-            )
+            ex_msg = error_keyword.group(2).strip()[:80] if error_keyword.group(2) else ""
             if ex_msg:
                 details.append("异常：{} - {}".format(ex_type, ex_msg))
             else:
@@ -649,18 +609,14 @@ class McHelperPlugin(Star):
         all_stacks = re.findall(r"at\s+([\w.]+)\(([^:]+:\d+)\)", error_text)
         meaningful = [s for s in all_stacks if not s[0].startswith(skip_patterns)]
         if meaningful:
-            details.append(
-                "异常位置：{} ({})".format(meaningful[0][0], meaningful[0][1])
-            )
+            details.append("异常位置：{} ({})".format(meaningful[0][0], meaningful[0][1]))
 
         coords = re.findall(
             r"(?:Tile Entity at|Block at|Position)\s*\[?(-?\d+)[,; ]\s*(-?\d+)[,; ]\s*(-?\d+)\]?",
             error_text,
         )
         if coords:
-            details.append(
-                "坐标：({}, {}, {})".format(coords[0][0], coords[0][1], coords[0][2])
-            )
+            details.append("坐标：({}, {}, {})".format(coords[0][0], coords[0][1], coords[0][2]))
 
         memory = re.findall(r"(\d+)\s*(MB|GB|MiB|GiB)", error_text, re.IGNORECASE)
         if memory:
@@ -682,15 +638,11 @@ class McHelperPlugin(Star):
         if paths:
             details.append("路径：{}".format(paths[0]))
 
-        java_versions = re.findall(
-            r"Java\s*(?:Version|VM|Runtime)[:\s]*([\d.]+)", error_text, re.IGNORECASE
-        )
+        java_versions = re.findall(r"Java\s*(?:Version|VM|Runtime)[:\s]*([\d.]+)", error_text, re.IGNORECASE)
         if java_versions:
             details.append("Java 版本：{}".format(java_versions[0]))
 
-        os_info = re.findall(
-            r"Operating\s+System[:\s]*([^\n]+)", error_text, re.IGNORECASE
-        )
+        os_info = re.findall(r"Operating\s+System[:\s]*([^\n]+)", error_text, re.IGNORECASE)
         if os_info:
             details.append("系统：{}".format(os_info[0].strip()))
 
@@ -729,8 +681,7 @@ class McHelperPlugin(Star):
             if d.startswith("内存"):
                 val = d.split("：")[1] if "：" in d else ""
                 tips.append(
-                    f"当前内存分配为 {val}。如果游戏卡顿或内存不足，"
-                    "在 PCL 设置中将内存调大（如 4096MB 或 6144MB）。"
+                    f"当前内存分配为 {val}。如果游戏卡顿或内存不足，在 PCL 设置中将内存调大（如 4096MB 或 6144MB）。"
                 )
 
             if d.startswith("Java 版本"):
@@ -742,41 +693,29 @@ class McHelperPlugin(Star):
 
             if d.startswith("服务器"):
                 srv = d.split("：")[1] if "：" in d else ""
-                tips.append(
-                    f"服务器地址：{srv}。如果是连接问题，检查地址是否正确、"
-                    "服务器是否开启、网络是否正常。"
-                )
+                tips.append(f"服务器地址：{srv}。如果是连接问题，检查地址是否正确、服务器是否开启、网络是否正常。")
 
             if d.startswith("路径") and ".mca" in d:
                 tips.append(
-                    "发现区块文件(.mca)损坏，用 MCA Selector 打开该文件，"
-                    "找到损坏的区块并删除（游戏会自动重新生成）。"
+                    "发现区块文件(.mca)损坏，用 MCA Selector 打开该文件，找到损坏的区块并删除（游戏会自动重新生成）。"
                 )
 
             if d.startswith("路径") and ".json" in d:
-                tips.append(
-                    "发现配置文件(.json)异常，尝试删除该配置文件（游戏会自动重建默认配置）。"
-                )
+                tips.append("发现配置文件(.json)异常，尝试删除该配置文件（游戏会自动重建默认配置）。")
 
             if d.startswith("异常位置"):
                 try:
                     loc = d.split("：")[1] if "：" in d else ""
                     cls = loc.split("(")[0].strip() if "(" in loc else loc
                     short = cls.split(".")[-1] if "." in cls else cls
-                    tips.append(
-                        f"错误出现在 {short} 类中。如果该类和模组相关，"
-                        "尝试更新或删除对应的模组。"
-                    )
+                    tips.append(f"错误出现在 {short} 类中。如果该类和模组相关，尝试更新或删除对应的模组。")
                 except Exception:
                     pass
 
             if d.startswith("系统"):
                 sys_text = d.split("：")[1] if "：" in d else ""
                 if "linux" in sys_text.lower() or "mac" in sys_text.lower():
-                    tips.append(
-                        "你正在使用非 Windows 系统，某些模组可能不兼容。"
-                        "检查模组是否支持你的操作系统。"
-                    )
+                    tips.append("你正在使用非 Windows 系统，某些模组可能不兼容。检查模组是否支持你的操作系统。")
 
             if d.startswith("退出代码"):
                 ec = d.split("：")[1] if "：" in d else ""
@@ -787,8 +726,7 @@ class McHelperPlugin(Star):
 
             if d.startswith("重复模组"):
                 tips.append(
-                    "检测到重复模组！打开 .minecraft/mods 文件夹，"
-                    "搜到上面对应的文件名，只保留一个版本，删除其余。"
+                    "检测到重复模组！打开 .minecraft/mods 文件夹，搜到上面对应的文件名，只保留一个版本，删除其余。"
                 )
 
         result += "\n\n---"
@@ -824,9 +762,7 @@ class McHelperPlugin(Star):
 
         return None
 
-    async def _ask_ai_with_context(
-        self, event: AstrMessageEvent, error_text: str
-    ) -> str:
+    async def _ask_ai_with_context(self, event: AstrMessageEvent, error_text: str) -> str:
         try:
             umo = event.unified_msg_origin
             provider_id = await self.context.get_current_chat_provider_id(umo)
@@ -836,9 +772,7 @@ class McHelperPlugin(Star):
             details = self._extract_report_details(error_text)
             context_block = ""
             if details:
-                context_block = (
-                    "从日志中提取的关键信息：\n" + "\n".join(details) + "\n\n"
-                )
+                context_block = "从日志中提取的关键信息：\n" + "\n".join(details) + "\n\n"
 
             prompt = (
                 "你是一个专业的 Minecraft 技术支持专家。请分析以下 latest.log 中的错误信息并给出详细的解决方案。\n\n"
@@ -862,239 +796,53 @@ class McHelperPlugin(Star):
             logger.error(f"AI 分析调用失败: {e}")
             return f"AI 分析调用失败：{str(e)}\n\n建议手动搜索错误信息中的关键词获取解决方案。"
 
-    def _md_to_image(self, md_text: str) -> str:
-        from PIL import Image, ImageDraw, ImageFilter, ImageFont
+    def _md_to_html(self, md_text: str) -> str:
+        import markdown as md_lib
 
-        try:
-            font_bold = ImageFont.truetype("C:/Windows/Fonts/seguiib.ttf", 17)
-            font_normal = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 17)
-            font_code = ImageFont.truetype("C:/Windows/Fonts/consola.ttf", 15)
-            font_h2 = ImageFont.truetype("C:/Windows/Fonts/seguiib.ttf", 22)
-        except Exception:
-            font_normal = font_bold = font_code = font_h2 = ImageFont.load_default()
-
-        padding = 24
-        line_spacing = 6
-        max_w = 720
-        white = "#ffffff"
-        text_color = "#1a1a1a"
-        accent = "#1976d2"
-        code_bg = "#e8e8e8"
-        sep_color = "#cccccc"
-
-        lines = md_text.split("\n")
-        blocks = []
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-            if line.startswith("```"):
-                code_lines = []
-                i += 1
-                while i < len(lines) and not lines[i].startswith("```"):
-                    code_lines.append(lines[i])
-                    i += 1
-                blocks.append(("code", "\n".join(code_lines)))
-            elif line.startswith("## "):
-                blocks.append(("h2", line[3:]))
-            elif line.startswith("**") and line.endswith("**") and len(line) > 4:
-                blocks.append(("h2", line[2:-2]))
-            elif line.startswith("- "):
-                blocks.append(("li", line[2:]))
-            elif line.strip() == "---":
-                blocks.append(("sep", ""))
-            elif line.strip() == "":
-                blocks.append(("blank", ""))
-            else:
-                blocks.append(("p", line))
-            i += 1
-
-        rendered = []
-        for btype, btext in blocks:
-            if btype == "blank":
-                rendered.append(("blank", ""))
-                continue
-            segs = []
-            text = btext
-            inline_pattern = re.compile(
-                r"(\*\*(.+?)\*\*|`([^`]+)`|\*(.+?)\*|\[(.+?)\]\((.+?)\))"
-            )
-            last_end = 0
-            for m in inline_pattern.finditer(text):
-                if m.start() > last_end:
-                    segs.append(("text", text[last_end : m.start()]))
-                if m.group(2):
-                    segs.append(("bold", m.group(2)))
-                elif m.group(3):
-                    segs.append(("code", m.group(3)))
-                elif m.group(4):
-                    segs.append(("italic", m.group(4)))
-                elif m.group(5):
-                    segs.append(("link", m.group(5)))
-                last_end = m.end()
-            if last_end < len(text):
-                segs.append(("text", text[last_end:]))
-            rendered.append((btype, segs))
-
-        line_h = 26
-        gap = 8
-
-        def measure(s_type, s_text):
-            f = {
-                "bold": font_bold,
-                "text": font_normal,
-                "code": font_code,
-                "italic": font_normal,
-                "link": font_normal,
-            }.get(s_type, font_normal)
-            return f.getbbox(s_text)[2]
-
-        def wrap_segs(segs, max_w):
-            if not segs:
-                return [segs]
-            total_w = sum(measure(s[0], s[1]) for s in segs) + 4 * len(segs)
-            if total_w <= max_w:
-                return [segs]
-            lines_out = []
-            current_line = []
-            current_w = 0
-            for s in segs:
-                sw = measure(s[0], s[1]) + 4
-                if current_w + sw > max_w and current_line:
-                    lines_out.append(current_line)
-                    current_line = [s]
-                    current_w = sw
-                else:
-                    current_line.append(s)
-                    current_w += sw
-            if current_line:
-                lines_out.append(current_line)
-            return lines_out
-
-        y = padding
-        x = padding
-        content_w = max_w - 2 * padding
-        total_h_est = padding
-
-        for btype, content in rendered:
-            if btype == "blank":
-                total_h_est += gap
-            elif btype == "h2":
-                total_h_est += 34 + gap
-            elif btype == "code":
-                code_lines_count = content.count("\n") + 1
-                total_h_est += code_lines_count * 20 + 12 + gap
-            elif btype == "li":
-                segs_list = [content] if isinstance(content, str) else content
-                wrap_result = wrap_segs(
-                    [("text", segs_list)] if isinstance(segs_list, str) else segs_list,
-                    content_w - 20,
-                )
-                total_h_est += len(wrap_result) * line_h + gap
-            elif btype == "p":
-                segs_list = (
-                    content if isinstance(content, list) else [("text", str(content))]
-                )
-                wrap_result = wrap_segs(segs_list, content_w)
-                total_h_est += len(wrap_result) * line_h + gap
-            elif btype == "sep":
-                total_h_est += 12 + gap
-            total_h_est += line_spacing
-
-        total_h_est += padding
-        img_h = max(total_h_est, 200)
-        img = Image.new("RGB", (max_w, int(img_h)), white)
-        draw = ImageDraw.Draw(img)
-
-        y = padding
-        for btype, content in rendered:
-            if btype == "blank":
-                y += gap
-                continue
-            elif btype == "h2":
-                draw.text((x, y), content, font=font_h2, fill=accent)
-                y += 34 + gap
-            elif btype == "code":
-                code_lines = content.split("\n")
-                code_h = len(code_lines) * 20 + 12
-                draw.rounded_rectangle(
-                    [x, y, x + content_w, y + code_h], 4, fill=code_bg
-                )
-                for ci, cl in enumerate(code_lines):
-                    draw.text(
-                        (x + 10, y + 6 + ci * 20), cl, font=font_code, fill=text_color
-                    )
-                y += code_h + gap
-            elif btype == "li":
-                bullet_x = x
-                text_x = x + 20
-                segs = (
-                    content if isinstance(content, list) else [("text", str(content))]
-                )
-                wrap_lines = wrap_segs(segs, content_w - 20)
-                draw.text((bullet_x, y), "\u2022", font=font_normal, fill=text_color)
-                for wi, wl in enumerate(wrap_lines):
-                    lx = text_x if wi == 0 else x + 4
-                    for stype, stext in wl:
-                        f = {
-                            "bold": font_bold,
-                            "text": font_normal,
-                            "code": font_code,
-                            "italic": font_normal,
-                        }.get(stype, font_normal)
-                        fc = accent if stype == "link" else text_color
-                        if stype == "code":
-                            cw = f.getbbox(stext)[2]
-                            draw.rounded_rectangle(
-                                [lx - 1, y + 2, lx + cw + 3, y + line_h - 2],
-                                2,
-                                fill=code_bg,
-                            )
-                        draw.text((lx, y), stext, font=f, fill=fc)
-                        lx += measure(stype, stext) + 4
-                    y += line_h
-                y += gap
-            elif btype == "p":
-                segs = (
-                    content if isinstance(content, list) else [("text", str(content))]
-                )
-                wrap_lines = wrap_segs(segs, content_w)
-                for wl in wrap_lines:
-                    lx = x
-                    for stype, stext in wl:
-                        f = {
-                            "bold": font_bold,
-                            "text": font_normal,
-                            "code": font_code,
-                            "italic": font_normal,
-                        }.get(stype, font_normal)
-                        fc = accent if stype == "link" else text_color
-                        if stype == "code":
-                            cw = f.getbbox(stext)[2]
-                            draw.rounded_rectangle(
-                                [lx - 1, y + 2, lx + cw + 3, y + line_h - 2],
-                                2,
-                                fill=code_bg,
-                            )
-                        draw.text((lx, y), stext, font=f, fill=fc)
-                        lx += measure(stype, stext) + 4
-                    y += line_h
-                y += gap
-            elif btype == "sep":
-                draw.line([x, y + 6, x + content_w, y + 6], fill=sep_color, width=1)
-                y += 12 + gap
-            y += line_spacing
-
-        img = img.crop((0, 0, max_w, int(y + padding)))
-        img = img.filter(ImageFilter.SMOOTH_MORE)
-        out_dir = self.plugin_data_path / "screenshots"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = str(out_dir / f"report_{int(time.time())}.png")
-        img.save(out_path, "PNG")
-        return out_path
+        body = md_lib.markdown(
+            md_text,
+            extensions=["extra", "codehilite", "nl2br"],
+        )
+        return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  body {{
+    font-family: -apple-system, "Segoe UI", "Noto Sans SC", "Microsoft YaHei",
+                 sans-serif;
+    font-size: 15px; line-height: 1.7; color: #1a1a1a;
+    padding: 28px 32px; max-width: 720px; margin: 0;
+    background: #ffffff;
+  }}
+  h2 {{ font-size: 20px; color: #1976d2; margin: 16px 0 8px; }}
+  ul {{ padding-left: 20px; }}
+  li {{ margin: 4px 0; }}
+  code {{
+    font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+    font-size: 13px; background: #e8e8e8; padding: 1px 5px;
+    border-radius: 3px;
+  }}
+  pre {{
+    background: #f5f5f5; padding: 12px 16px; border-radius: 6px;
+    overflow-x: auto; font-size: 13px;
+  }}
+  hr {{ border: none; border-top: 1px solid #cccccc; margin: 12px 0; }}
+  em {{ color: #666; }}
+  blockquote {{
+    border-left: 3px solid #1976d2; margin: 8px 0; padding: 4px 12px;
+    background: #f8faff;
+  }}
+  p {{ margin: 6px 0; }}
+</style>
+</head>
+<body>{body}</body>
+</html>"""
 
     async def _send_md_image(self, event, md_text: str):
-        path = self._md_to_image(md_text)
-        yield event.make_result().file_image(path)
+        html = self._md_to_html(md_text)
+        url = await self.html_render(html, {}, return_url=True)
+        yield event.image_result(url)
 
     async def terminate(self):
         logger.info("MC Helper 插件已卸载")
