@@ -66,8 +66,10 @@ class McHelperPlugin(Star):
                 if category not in self.solutions:
                     self.solutions[category] = {}
                 self.solutions[category][key] = {"solution": solution}
-                with open(self.db_path, "w", encoding="utf-8") as f:
+                tmp_path = self.db_path.with_suffix(".tmp")
+                with open(tmp_path, "w", encoding="utf-8") as f:
                     json.dump(self.solutions, f, ensure_ascii=False, indent=2)
+                tmp_path.replace(self.db_path)
             except Exception as e:
                 self.solutions = old
                 logger.error(f"保存方案库失败: {e}")

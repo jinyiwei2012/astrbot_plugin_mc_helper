@@ -119,6 +119,10 @@ class Handlers:
             )
             return
 
+        if not self.rate_limiter.allow(event.unified_msg_origin):
+            yield event.plain_result("请求过于频繁，请稍后再试。")
+            return
+
         ai = await self.p.ask_ai(event, error_text)
         md = self._cfg("ai_result_max_chars", 2000)
 

@@ -29,26 +29,30 @@ def extract_report_details(error_text: str) -> list[str]:
 
     jar_paths = RE_JAR_PATH.findall(error_text)
     if jar_paths:
-        details.append("涉及文件：" + "、".join(set(jar_paths[:3])))
+        unique = list(dict.fromkeys(jar_paths))
+        details.append("涉及文件：" + "、".join(unique[:3]))
 
     mod_names = RE_MOD_FILE.findall(error_text)
     if mod_names and not jar_paths:
-        details.append("涉及模组：" + ", ".join(set(mod_names[:3])))
+        unique = list(dict.fromkeys(mod_names))
+        details.append("涉及模组：" + ", ".join(unique[:3]))
 
-    mod_ids = set()
+    mod_ids_list = []
+    seen_ids = set()
     for m in RE_MOD_ID.findall(error_text):
         parts = m.split(":")
-        if parts[0] not in SKIP_MOD_ID:
-            mod_ids.add(m)
-    mod_id_list = sorted(mod_ids)[:4]
-    if mod_id_list:
-        details.append("涉及模组 ID：" + "、".join(mod_id_list))
+        if parts[0] not in SKIP_MOD_ID and m not in seen_ids:
+            seen_ids.add(m)
+            mod_ids_list.append(m)
+    if mod_ids_list:
+        details.append("涉及模组 ID：" + "、".join(mod_ids_list[:4]))
 
     dup_section = RE_DUP_SECTION.search(error_text)
     if dup_section:
         dup_files = RE_JAR_NAME.findall(dup_section.group(1))
         if dup_files:
-            details.append("重复模组：" + "、".join(set(dup_files[:5])))
+            unique_dup = list(dict.fromkeys(dup_files))
+            details.append("重复模组：" + "、".join(unique_dup[:5]))
 
     exit_code = RE_EXIT_CODE.search(error_text)
     if exit_code:

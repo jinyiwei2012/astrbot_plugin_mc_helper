@@ -4,6 +4,7 @@ import asyncio
 import ipaddress
 import json
 import re
+import socket
 import stat
 import time
 from pathlib import Path
@@ -38,7 +39,7 @@ def _clean_fn(name: str) -> str:
     return cleaned
 
 
-async def _validate_url(url: str) -> str:
+async def _validate_url(url: str) -> tuple[str, str, str]:
     parsed = urlparse(url)
     if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
         raise ValueError("不允许的 URL 协议")
@@ -61,13 +62,39 @@ async def _validate_url(url: str) -> str:
     for net in _PRIVATE_RANGES:
         if ip in net:
             raise ValueError("不允许访问内网地址")
-    return parsed.geturl()
+    pinned_ip = str(ip)
+    return parsed.geturl(), host, pinned_ip
+
+
+class _PinnedResolver:
+    def __init__(self, hostname: str, ip: str, loop):
+        self._hostname = hostname
+        self._ip = ip
+        self._family = socket.AF_INET6 if ":" in ip else socket.AF_INET
+        self._loop = loop
+
+    async def resolve(self, host, port=0, family=0):
+        if host == self._hostname:
+            return [
+                {
+                    "hostname": host,
+                    "host": self._ip,
+                    "port": port,
+                    "family": self._family,
+                    "proto": 6,
+                    "flags": socket.AI_NUMERICHOST,
+                }
+            ]
+        return [{"hostname": host, "host": host, "port": port, "family": family, "proto": 6, "flags": 0}]
 
 
 async def download_zip(file_url: str, zip_path: Path, timeout_sec: int = 120):
-    safe_url = await _validate_url(file_url)
+    safe_url, hostname, pinned_ip = await _validate_url(file_url)
+    loop = asyncio.get_running_loop()
+    resolver = _PinnedResolver(hostname, pinned_ip, loop)
+    connector = aiohttp.TCPConnector(resolver=resolver)
     timeout = aiohttp.ClientTimeout(total=timeout_sec)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
         async with session.get(safe_url) as resp:
             if resp.status != 200:
                 raise ConnectionError(f"HTTP {resp.status}")
